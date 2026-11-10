@@ -1,0 +1,85 @@
+import type {
+  CampaignSummary,
+  GameState,
+  LobbyCountry,
+  NotificationDto,
+  ProvinceDetail,
+  PublicUser,
+  BuildingType,
+  UnitType,
+} from '@cw/shared';
+
+const BASE: string = import.meta.env.VITE_API_URL ?? '';
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}/api${path}`, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    ...init,
+  });
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = await res.json();
+      message = Array.isArray(body.message) ? body.message.join(', ') : (body.message ?? message);
+    } catch {
+      /* ignore non-JSON error bodies */
+    }
+    throw new ApiError(message, res.status);
+  }
+  return (await res.json()) as T;
+}
+
+const post = <T>(path: string, body?: unknown) =>
+  request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
+
+export const api = {
+  me: async (): Promise<PublicUser | null> => {
+    try {
+      return (await request<{ user: PublicUser }>('/auth/me')).user;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) return null;
+      throw e;
+    }
+  },
+  register: (username: string, password: string) =>
+    post<{ user: PublicUser }>('/auth/register', { username, password }),
+  login: (username: string, password: string) => post<{ user: PublicUser }>('/auth/login', { username, password }),
+  logout: () => post<{ ok: true }>('/auth/logout'),
+
+  campaigns: () => request<CampaignSummary[]>('/campaigns'),
+  createCampaign: (name: string) => post<{ id: string; name: string }>('/campaigns', { name }),
+  lobby: (campaignId: string) => request<LobbyCountry[]>(`/campaigns/${campaignId}/lobby`),
+  join: (campaignId: string, countryId: string) => post<{ ok: true }>(`/campaigns/${campaignId}/join`, { countryId }),
+
+  state: (campaignId: string) => request<GameState>(`/campaigns/${campaignId}/state`),
+  province: (campaignId: string, provinceId: string) =>
+    request<ProvinceDetail>(`/campaigns/${campaignId}/provinces/${provinceId}`),
+  build: (campaignId: string, provinceId: string, type: BuildingType) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/provinces/${provinceId}/buildings`, { type }),
+
+  moveFormation: (
+    campaignId: string,
+    formationId: string,
+    provinceId: string,
+    units?: Partial<Record<UnitType, number>>,
+  ) =>
+    post<{ ok: true; formationId: string; etaSeconds: number }>(
+      `/campaigns/${campaignId}/formations/${formationId}/move`,
+      { provinceId, units },
+    ),
+  stopFormation: (campaignId: string, formationId: string) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/formations/${formationId}/stop`),
+
+  notifications: (campaignId: string) => request<NotificationDto[]>(`/campaigns/${campaignId}/notifications`),
+  readNotifications: (campaignId: string) => post<{ ok: true }>(`/campaigns/${campaignId}/notifications/read`),
+};

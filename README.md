@@ -1,0 +1,88 @@
+# Cold War 1947 — Slice 1
+
+Real-time multiplayer strategy game (Supremacy 1914 style). This is **Slice 1**: the foundation and the first part of the core loop.
+
+Stack: React + Vite + PixiJS · NestJS · PostgreSQL (Neon) + Drizzle · Socket.IO. No Redis: the server clock polls Postgres for due timers.
+
+## What works in this slice
+
+- Accounts (register / login, httpOnly cookie session, bcrypt)
+- Campaigns (one is created automatically on first start; players can create more), isolated from each other
+- Country selection: 8 playable countries, 4 AI-only (Poland, Egypt, Sweden, Japan). Unclaimed countries run on AI
+- 72-province placeholder map (12 x 6 grid), PixiJS render, pan / zoom / select, ownership colours
+- Resources: money, food, oil, steel, electronics, rare materials, manpower. Production per province, calculated lazily from stored timestamps, so it keeps running while you are offline
+- Double-resource provinces (about 2x of one resource)
+- 9 buildings with slots, costs, server-side construction timers. **Working effects:** Local Factory (+25% province production), Recruitment Center (auto-recruits 1 infantry per hour if you can afford it). The other buildings can be built but their effects arrive in later slices (the UI marks them "effect coming later")
+- Infantry upkeep (1 food + 0.5 money per hour each) creates economic pressure
+- Notifications (building complete, recruited, AI takeover), pushed live over Socket.IO
+- AI: economic AI for unclaimed countries, and **AI takeover after 48 hours of player inactivity** (`INACTIVITY_HOURS`). You get control back as soon as you open the game again
+- Server authority: all spending is validated on the server inside a transaction that row-locks your country, so double-clicks cannot double-spend
+- `GAME_SPEED` setting to test long timers quickly
+
+## Week 1: armies and movement
+
+- Select one of your armies (from the province panel or the Armies list) and click **Move**, then click a destination province on the map. You see the route and arrival time before confirming.
+- Pathfinding finds the fastest route over province neighbours. Travel time depends on distance, terrain (forest, hills, mountains and desert are slower), the slowest unit in the army, and railways. A railway in two neighbouring provinces halves the time for that leg.
+- You can send only some of the units: they split off as a new "Task Force" and the rest stay behind.
+- Armies are drawn as gold markers travelling along their route. You can **Redirect** an army mid-march (it finishes its current leg first) or **Stop** it.
+- Orders are stored with exact arrival times and applied by the server clock, so armies keep marching while you are offline or if the server restarts. Late legs are caught up without drift.
+- For now armies can only travel through **your own provinces**. Entering enemy land arrives with combat in Week 2.
+- **After updating from the earlier build, run `npm run db:push` again** to add the movement columns.
+
+## Not built yet (next slices)
+
+Combat and province capture · research · generals · monthly missions and leaderboard · diplomacy and alliances · capital relocation · payments. The Research / Generals / Diplomacy tabs are placeholders.
+
+## Setup
+
+Requirements: Node.js 20+ and a Neon (or any PostgreSQL) database.
+
+```bash
+npm install
+cp .env.example .env        # then edit .env (see below)
+npm run build:shared
+npm run db:push             # creates the tables in your database
+npm run dev                 # server on :3000, web on :5173
+```
+
+Open http://localhost:5173, register, pick a country in the lobby, and play.
+
+### `.env`
+
+| Variable | Meaning |
+| --- | --- |
+| `DATABASE_URL` | Required. Neon pooled connection string |
+| `DATABASE_URL_DIRECT` | Optional. Neon direct string, used only by `db:push` |
+| `JWT_SECRET` | Required. 32+ random characters |
+| `PORT` | Server port (default 3000). If you change it, also change `SERVER` in `apps/web/vite.config.ts` |
+| `CORS_ORIGIN` | Allowed web origin(s), comma separated |
+| `GAME_SPEED` | 1 = real time. 60 = one real minute is one game hour |
+| `TICK_MS` | How often the server checks timers (default 5000) |
+| `INACTIVITY_HOURS` | Hours before AI takes over a player (default 48) |
+| `AI_INTERVAL_SECONDS` | Seconds between AI decisions (divided by `GAME_SPEED`) |
+| `SCHEDULER_ENABLED` | Set `false` to stop timers (for example on a second instance) |
+| `ALLOW_CAMPAIGN_CREATION` | Set `false` to stop players creating campaigns |
+
+### Quick test of the loop
+
+Set `GAME_SPEED=60` in `.env`. A local factory then builds in 1 minute, a recruitment center in 30 seconds, and AI countries start building within about a minute. To test the 48-hour takeover quickly, set `INACTIVITY_HOURS=0.01`, log out, and wait a minute.
+
+## Notes
+
+- **Neon:** use the pooled URL for `DATABASE_URL`, and the direct URL for `DATABASE_URL_DIRECT` if `db:push` has trouble.
+- **Schema changes:** this slice uses `drizzle-kit push`. When you want versioned migrations, run `npx drizzle-kit generate` inside `apps/server` and switch to `migrate`.
+- **Hosting:** Socket.IO needs a long-running Node process (Railway, Fly, Render, a VPS), not a serverless platform. Run only one server instance for now, because the scheduler assumes a single process.
+- **In production** set `NODE_ENV=production`, serve over HTTPS, and set `VITE_API_URL` when building the web app if it is hosted on a different origin than the API (cookies are then sent cross-site with `SameSite=None; Secure`).
+- **Placeholder map:** the grid in `packages/shared/src/map-data.ts` stands in for real geography. Province geometry is stored independently of PixiJS, so you can replace it with real data later without touching the renderer.
+- **Balance:** costs, times, unit stats and starting resources live in `packages/shared/src/game-data/`.
+
+## Structure
+
+```
+apps/server/src   auth, db (schema), economy, buildings, campaigns, notifications,
+                  scheduler (timers), ai, realtime (Socket.IO)
+apps/web/src      pages, features/world-map, features/economy, services
+packages/shared   types, game-data, map-data, rules (shared by server and web), tests
+```
+
+Run the rule/map tests with `npm test`.

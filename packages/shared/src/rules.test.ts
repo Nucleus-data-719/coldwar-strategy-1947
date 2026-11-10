@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+import {
+  applyRates,
+  canAfford,
+  emptyResources,
+  provinceProduction,
+  scaleSeconds,
+  unitUpkeepPerHour,
+  PROVINCES,
+  COUNTRIES,
+} from './index';
+
+describe('rules', () => {
+  it('local factory adds 25% production once complete', () => {
+    const base = { ...emptyResources(), money: 100 };
+    expect(provinceProduction(base, [{ type: 'local_factory', status: 'constructing' }]).money).toBe(100);
+    expect(provinceProduction(base, [{ type: 'local_factory', status: 'complete' }]).money).toBe(125);
+  });
+
+  it('applyRates never goes below zero', () => {
+    const bal = { ...emptyResources(), food: 10 };
+    const rates = { ...emptyResources(), food: -100 };
+    expect(applyRates(bal, rates, 3600).food).toBe(0);
+  });
+
+  it('canAfford checks every resource', () => {
+    const bal = { ...emptyResources(), money: 100, steel: 5 };
+    expect(canAfford(bal, { money: 50 })).toBe(true);
+    expect(canAfford(bal, { money: 50, steel: 10 })).toBe(false);
+  });
+
+  it('upkeep scales with unit count', () => {
+    const up = unitUpkeepPerHour([{ unitType: 'infantry', count: 10 }]);
+    expect(up.food).toBe(10);
+    expect(up.money).toBe(5);
+  });
+
+  it('scaleSeconds divides by game speed', () => {
+    expect(scaleSeconds(3600, 60)).toBe(60);
+    expect(scaleSeconds(10, 100)).toBe(1);
+  });
+});
+
+describe('map data', () => {
+  it('has 72 provinces, each country owns some, and one capital per country', () => {
+    expect(PROVINCES.length).toBe(72);
+    for (const c of COUNTRIES) {
+      const owned = PROVINCES.filter((p) => p.countryCode === c.code);
+      expect(owned.length).toBeGreaterThan(0);
+      expect(owned.filter((p) => p.isCapital).length).toBe(1);
+    }
+  });
+
+  it('adjacency is symmetric', () => {
+    const byKey = new Map(PROVINCES.map((p) => [p.key, p]));
+    for (const p of PROVINCES) {
+      for (const a of p.adjacent) expect(byKey.get(a)!.adjacent).toContain(p.key);
+    }
+  });
+});

@@ -1,0 +1,25 @@
+{
+  "name": "cold-war-1947",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w @cw/shared",
+    "dev": "npm run build:shared && concurrently -n shared,server,web -c gray,blue,green \"npm run dev -w @cw/shared\" \"npm run start:dev -w @cw/server\" \"npm run dev -w @cw/web\"",
+    "build": "npm run build:shared && npm run build -w @cw/server && npm run build -w @cw/web",
+    "start": "npm run start -w @cw/server",
+    "db:push": "npm run db:push -w @cw/server",
+    "db:studio": "npm run db:studio -w @cw/server",
+    "test": "npm run test -w @cw/shared"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
