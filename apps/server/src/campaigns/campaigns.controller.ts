@@ -16,14 +16,17 @@ import { AuthUser, CurrentUser } from '../common/current-user.decorator';
 import { parse } from '../common/zod';
 import { env } from '../config/env';
 import { BuildingsService } from '../buildings/buildings.service';
+import { CombatService } from '../military/combat.service';
 import { MovementService } from '../military/movement.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PlayersService } from '../players/players.service';
+import { WarsService } from '../wars/wars.service';
 import { CampaignsService } from './campaigns.service';
 
 const createSchema = z.object({ name: z.string().trim().min(3).max(60) });
 const joinSchema = z.object({ countryId: z.string().uuid() });
 const buildSchema = z.object({ type: z.enum(BUILDING_TYPES) });
+const warSchema = z.object({ countryId: z.string().uuid() });
 const moveSchema = z.object({
   provinceId: z.string().uuid(),
   // Optional: send only some units, as a new task force.
@@ -39,6 +42,8 @@ export class CampaignsController {
     private readonly buildingsService: BuildingsService,
     private readonly notifications: NotificationsService,
     private readonly movement: MovementService,
+    private readonly warsService: WarsService,
+    private readonly combat: CombatService,
   ) {}
 
   @Get()
@@ -112,6 +117,23 @@ export class CampaignsController {
     @Param('formationId', ParseUUIDPipe) formationId: string,
   ) {
     return this.movement.stop(user.id, id, formationId);
+  }
+
+  @Get(':id/wars')
+  wars(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.warsService.list(user.id, id);
+  }
+
+  @Post(':id/wars')
+  @HttpCode(200)
+  declareWar(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
+    const { countryId } = parse(warSchema, body);
+    return this.warsService.declare(user.id, id, countryId);
+  }
+
+  @Get(':id/battles')
+  battles(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.combat.listReports(user.id, id);
   }
 
   @Get(':id/notifications')

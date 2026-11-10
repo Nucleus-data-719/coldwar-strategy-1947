@@ -45,10 +45,25 @@ export function legSeconds(
   return Math.max(1, Math.round((hours * 3600) / gameSpeed));
 }
 
+export type Relation = 'own' | 'hostile' | 'blocked';
+
+/** Own provinces are free to enter, provinces of countries at war with us are fought over, the rest are closed. */
+export function relationOf(
+  ownerId: string | undefined,
+  countryId: string,
+  atWarWith: ReadonlySet<string>,
+): Relation {
+  if (ownerId === countryId) return 'own';
+  if (ownerId !== undefined && atWarWith.has(ownerId)) return 'hostile';
+  return 'blocked';
+}
+
 export interface RouteContext {
   countryId: string;
   /** province key -> owner country id */
   ownerByKey: ReadonlyMap<string, string>;
+  /** ids of countries we are at war with */
+  atWarWith: ReadonlySet<string>;
   /** keys of provinces with a completed railway */
   railwayKeys: ReadonlySet<string>;
   speed: number;
@@ -65,15 +80,19 @@ export interface Route {
 
 const hasRail = (ctx: RouteContext, a: string, b: string) => ctx.railwayKeys.has(a) && ctx.railwayKeys.has(b);
 
+const canEnter = (ctx: RouteContext, key: string) =>
+  relationOf(ctx.ownerByKey.get(key), ctx.countryId, ctx.atWarWith) !== 'blocked';
+
 /**
  * Fastest route over province adjacency (Dijkstra on travel time).
- * Armies may only enter provinces their own country owns. Combat will widen this.
+ * Armies may enter their own provinces and provinces of countries they are at war with
+ * (a battle is fought on arrival). Other countries' land is closed.
  * The server and the browser use this same function, so the preview matches the order.
  */
 export function planRoute(startKey: string, goalKey: string, ctx: RouteContext): Route | null {
   if (ctx.speed <= 0) return null;
   if (!PROVINCE_BY_KEY[startKey] || !PROVINCE_BY_KEY[goalKey]) return null;
-  if (ctx.ownerByKey.get(goalKey) !== ctx.countryId) return null;
+  if (!canEnter(ctx, goalKey)) return null;
   if (startKey === goalKey) return { path: [startKey], legSeconds: [], totalSeconds: 0 };
 
   const dist = new Map<string, number>([[startKey, 0]]);
@@ -93,7 +112,7 @@ export function planRoute(startKey: string, goalKey: string, ctx: RouteContext):
     if (current === goalKey) break;
     done.add(current);
     for (const next of PROVINCE_BY_KEY[current].adjacent) {
-      if (done.has(next) || ctx.ownerByKey.get(next) !== ctx.countryId) continue;
+      if (done.has(next) || !canEnter(ctx, next)) continue;
       const secs = legSeconds(current, next, ctx.speed, hasRail(ctx, current, next), ctx.gameSpeed);
       const candidate = best + secs;
       if (candidate < (dist.get(next) ?? Infinity)) {
@@ -126,12 +145,18 @@ export interface AdvanceInput {
   gameSpeed: number;
   countryId: string;
   ownerByKey: ReadonlyMap<string, string>;
+  atWarWith: ReadonlySet<string>;
   railwayKeys: ReadonlySet<string>;
 }
 
 export type AdvanceResult =
   | { status: 'arrived'; locationKey: string }
   | { status: 'blocked'; locationKey: string }
+  /**
+   * The army reached a province held by an enemy. The caller fights the battle; if it is won
+   * and the province changes hands, call advanceMovement again with the same remaining route.
+   */
+  | { status: 'battle'; locationKey: string; targetKey: string; remainingKeys: string[]; arrivedAt: number }
   | {
       status: 'moving';
       locationKey: string;
@@ -154,7 +179,11 @@ export function advanceMovement(i: AdvanceInput): AdvanceResult {
   let arrivedAt = i.legArrivesAt;
 
   for (;;) {
-    if (i.ownerByKey.get(next) !== i.countryId) return { status: 'blocked', locationKey: location };
+    const relation = relationOf(i.ownerByKey.get(next), i.countryId, i.atWarWith);
+    if (relation === 'blocked') return { status: 'blocked', locationKey: location };
+    if (relation === 'hostile') {
+      return { status: 'battle', locationKey: location, targetKey: next, remainingKeys: path, arrivedAt };
+    }
     location = next;
     if (path.length === 0) return { status: 'arrived', locationKey: location };
     next = path.shift()!;

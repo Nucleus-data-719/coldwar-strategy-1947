@@ -37,7 +37,9 @@ export class EconomyService {
 
   /** Hourly net production (production minus unit upkeep). Can be negative. */
   async computeRates(db: DbOrTx, countryId: string): Promise<Resources> {
-    const owned = await db.select().from(provinces).where(eq(provinces.ownerCountryId, countryId));
+    const allOwned = await db.select().from(provinces).where(eq(provinces.ownerCountryId, countryId));
+    // A freshly captured province produces nothing until its disruption ends.
+    const owned = allOwned.filter((p) => !p.disruptedUntil);
     let total = emptyResources();
 
     if (owned.length > 0) {
@@ -102,6 +104,26 @@ export class EconomyService {
       const [country] = await tx.select().from(countries).where(eq(countries.id, countryId)).for('update');
       if (!country) throw new NotFoundException('Country not found');
       return fn(tx, country);
+    });
+  }
+
+  /**
+   * Like `lock`, for actions that touch several countries (a battle). Rows are locked in id order
+   * so two battles at once cannot deadlock.
+   */
+  async lockMany<T>(
+    countryIds: string[],
+    fn: (tx: DbOrTx, countryRows: Map<string, CountryRow>) => Promise<T>,
+  ): Promise<T> {
+    const sorted = [...new Set(countryIds)].sort();
+    return this.db.transaction(async (tx) => {
+      const rows = new Map<string, CountryRow>();
+      for (const id of sorted) {
+        const [country] = await tx.select().from(countries).where(eq(countries.id, id)).for('update');
+        if (!country) throw new NotFoundException('Country not found');
+        rows.set(id, country);
+      }
+      return fn(tx, rows);
     });
   }
 }

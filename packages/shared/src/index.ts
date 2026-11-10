@@ -6,3 +6,4 @@ export * from './game-data/constants';
 export * from './map-data';
 export * from './rules';
 export * from './movement';
+export * from './combat';

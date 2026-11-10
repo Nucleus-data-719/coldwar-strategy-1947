@@ -1,3 +1,4 @@
+import type { BattleModifier, BattleRoundLog } from './combat';
 import type {
   BuildingStatus,
   BuildingType,
@@ -5,6 +6,37 @@ import type {
   Terrain,
   UnitType,
 } from './types';
+
+export interface BattleSideReport {
+  countryId: string;
+  countryName: string;
+  formations: string[];
+  before: { unitType: UnitType; count: number }[];
+  after: { unitType: UnitType; count: number }[];
+}
+
+/** What is stored for a battle. `walkover` means the province had no defenders. */
+export interface BattleReportData {
+  provinceKey: string;
+  provinceName: string;
+  terrain: Terrain;
+  seed: number;
+  attacker: BattleSideReport;
+  defender: BattleSideReport;
+  modifiers: BattleModifier[];
+  rounds: BattleRoundLog[];
+  summary: string[];
+  capturedProvince: boolean;
+  capturedCapital: boolean;
+  /** What happened to the attacking army afterwards. */
+  attackerFate: 'advanced' | 'retreated' | 'destroyed';
+}
+
+export interface BattleReportDto extends BattleReportData {
+  id: string;
+  createdAt: string;
+  outcome: 'attacker_won' | 'defender_held' | 'walkover';
+}
 
 export interface PublicUser {
   id: string;
@@ -63,6 +95,8 @@ export interface GameState {
   provinces: StateProvince[];
   /** Your own armies, including those on the move. */
   formations: FormationDto[];
+  /** Ids of the countries you are at war with. */
+  atWarWith: string[];
   resources: { balance: Resources; rates: Resources };
   serverTime: string;
 }
@@ -101,6 +135,17 @@ export interface ProvinceDetail {
   ownerName: string;
   buildings: BuildingDto[];
   formations: FormationDto[];
+  /** Set while a captured province produces nothing. */
+  disruptedUntil: string | null;
+}
+
+export interface WarDto {
+  id: string;
+  enemyCountryId: string;
+  enemyName: string;
+  declaredAt: string;
+  /** True when you declared it. */
+  declaredByYou: boolean;
 }
 
 export interface NotificationDto {

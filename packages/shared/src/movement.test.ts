@@ -8,7 +8,7 @@ function ownership(codeToOwner: Record<string, string>) {
   return new Map(PROVINCES.map((p) => [p.key, codeToOwner[p.countryCode] ?? THEM]));
 }
 const usa = ownership({ USA: ME });
-const baseCtx = { countryId: ME, ownerByKey: usa, railwayKeys: new Set<string>(), speed: 1, gameSpeed: 1 };
+const baseCtx = { countryId: ME, ownerByKey: usa, atWarWith: new Set<string>(), railwayKeys: new Set<string>(), speed: 1, gameSpeed: 1 };
 
 describe('movement', () => {
   it('speed is the slowest unit, 0 when empty', () => {
@@ -59,7 +59,7 @@ describe('movement', () => {
       speed: 1,
       gameSpeed: 1,
       countryId: ME,
-      ownerByKey: usa,
+      ownerByKey: usa, atWarWith: new Set<string>(),
       railwayKeys: new Set<string>(),
     };
     // Server comes back long after the whole journey.
@@ -92,9 +92,41 @@ describe('movement', () => {
       speed: 1,
       gameSpeed: 1,
       countryId: ME,
-      ownerByKey: lost,
+      ownerByKey: lost, atWarWith: new Set<string>(),
       railwayKeys: new Set<string>(),
     });
     expect(result).toEqual({ status: 'blocked', locationKey: route.path[1] });
+  });
+
+  it('plans through enemy land only when at war', () => {
+    const goal = PROVINCES.find((p) => p.countryCode !== 'USA')!.key;
+    const enemyId = usa.get(goal)!;
+    expect(planRoute('p0_0', goal, baseCtx)).toBeNull();
+    const route = planRoute('p0_0', goal, { ...baseCtx, atWarWith: new Set([enemyId]) });
+    expect(route !== null).toBe(true);
+  });
+
+  it('stops with a battle when the next province is hostile', () => {
+    const goal = PROVINCES.find((p) => p.countryCode !== 'USA')!.key;
+    const enemyId = usa.get(goal)!;
+    const war = { ...baseCtx, atWarWith: new Set([enemyId]) };
+    const route = planRoute('p0_0', goal, war)!;
+    const firstEnemy = route.path.findIndex((k) => usa.get(k) === enemyId);
+    expect(firstEnemy).toBeGreaterThan(0);
+    const result = advanceMovement({
+      locationKey: route.path[firstEnemy - 2] ?? route.path[0],
+      nextKey: route.path[firstEnemy - 1],
+      remainingKeys: route.path.slice(firstEnemy),
+      legArrivesAt: 0,
+      now: 1e12,
+      speed: 1,
+      gameSpeed: 1,
+      countryId: ME,
+      ownerByKey: usa,
+      atWarWith: war.atWarWith,
+      railwayKeys: new Set<string>(),
+    });
+    expect(result.status).toBe('battle');
+    if (result.status === 'battle') expect(result.targetKey).toBe(route.path[firstEnemy]);
   });
 });

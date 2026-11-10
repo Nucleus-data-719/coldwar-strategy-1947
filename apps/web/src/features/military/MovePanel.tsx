@@ -60,12 +60,13 @@ export function MovePanel({ campaignId, state, formation, dest, onPreview, onClo
         ? planRoute(startKey, dest, {
             countryId: state.me.countryId,
             ownerByKey,
+            atWarWith: new Set(state.atWarWith),
             railwayKeys,
             speed,
             gameSpeed: state.campaign.gameSpeed,
           })
         : null,
-    [dest, startKey, speed, ownerByKey, railwayKeys, state.me.countryId, state.campaign.gameSpeed],
+    [dest, startKey, speed, ownerByKey, state.atWarWith, railwayKeys, state.me.countryId, state.campaign.gameSpeed],
   );
 
   const pathKey = route ? route.path.join('>') : '';
@@ -75,6 +76,7 @@ export function MovePanel({ campaignId, state, formation, dest, onPreview, onClo
   }, [pathKey]);
   useEffect(() => () => onPreview(null), []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const attackKeys = route ? route.path.filter((k) => ownerByKey.get(k) !== state.me.countryId) : [];
   const destProvince = dest ? state.provinces.find((p) => p.key === dest) : undefined;
 
   const move = useMutation({
@@ -147,14 +149,20 @@ export function MovePanel({ campaignId, state, formation, dest, onPreview, onClo
       <h3>Destination</h3>
       {!dest && (
         <p className="muted small">
-          Click a province on the map. For now armies can only travel through your own provinces; combat arrives with
-          the next update.
+          Click a province on the map. Armies cross your own land and the land of countries you are at war with.
         </p>
       )}
       {sameSpot && <p className="error small">The army is already there. Pick a different province.</p>}
       {dest && !sameSpot && !route && (
         <p className="error small">
-          No route to {PROVINCE_BY_KEY[dest]?.name}. Armies can only cross your own provinces for now.
+          No route to {PROVINCE_BY_KEY[dest]?.name}. You can only enter your own provinces and those of countries you
+          are at war with. Declare war in the Diplomacy tab to attack.
+        </p>
+      )}
+      {route && attackKeys.length > 0 && (
+        <p className="warn small">
+          ⚔ This route attacks {attackKeys.map((k) => PROVINCE_BY_KEY[k]?.name).join(', ')}. A battle is fought on
+          arrival; if you lose, the army is destroyed.
         </p>
       )}
       {route && (

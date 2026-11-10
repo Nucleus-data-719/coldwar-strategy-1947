@@ -86,3 +86,19 @@ packages/shared   types, game-data, map-data, rules (shared by server and web), 
 ```
 
 Run the rule/map tests with `npm test`.
+
+## Week 2: war, battles and province capture
+
+**Apply the database changes first** (`npm run db:push`, or the SQL in `docs/week2.sql` if db:push fails on Neon), then restart. Existing campaigns work, but only new campaigns get garrisons in every province (see below).
+
+How it works:
+
+- **Declare war** in the Diplomacy tab, or from any foreign province panel. War starts at once. Armies can only enter your own land and the land of countries you are at war with.
+- **Order an army** into enemy land as usual. A battle is fought when it arrives. The move panel warns you when the route attacks someone.
+- **Battles** are automatic and seeded (replayable). Both sides hit each other every round; defenders get terrain, fortress and local-defence bonuses to attack *and* defence. A side below 10% strength breaks and is destroyed. The loser loses the whole army.
+- **Capture**: if the defenders are wiped out (or there were none) the province changes owner and the army moves in. It produces nothing for 6 game hours. If it was a capital, the loser's capital moves to another province, you take 15% of their stockpile and their stability drops by 20.
+- **Battle reports** (sidebar) show both armies before and after, the bonuses, and round-by-round strength, with plain-language reasons.
+- Every province in a **new** campaign starts with a small garrison (capitals 5 infantry, others 2). Create a new campaign (`ALLOW_CAMPAIGN_CREATION=true`) to get them.
+- The AI does not attack yet; it only defends. Peace treaties arrive with diplomacy.
+
+Done when: you capture an AI province, its income moves to you (after the occupation period), and the report tells you why you won.

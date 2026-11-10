@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { and, eq, isNull, lt, lte } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lt, lte } from 'drizzle-orm';
 import {
   BUILDINGS,
   GARRISON_NAME,
@@ -66,6 +66,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.completeBuildings();
       await this.movement.processDue();
+      await this.endDisruptions();
       await this.autoRecruit();
       await this.handleInactivity();
       await this.ai.runDue();
@@ -73,6 +74,30 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       this.log.error(`Tick failed: ${(err as Error).message}`);
     } finally {
       this.running = false;
+    }
+  }
+
+  /** Captured provinces start producing again once their occupation period is over. */
+  private async endDisruptions() {
+    const due = await this.db
+      .select({ id: provinces.id, ownerId: provinces.ownerCountryId, campaignId: provinces.campaignId })
+      .from(provinces)
+      .where(and(isNotNull(provinces.disruptedUntil), lte(provinces.disruptedUntil, new Date())))
+      .limit(100);
+
+    for (const d of due) {
+      try {
+        await this.economy.lock(d.ownerId, async (tx, country) => {
+          const [fresh] = await tx.select().from(provinces).where(eq(provinces.id, d.id)).for('update');
+          if (!fresh || fresh.ownerCountryId !== country.id || !fresh.disruptedUntil || fresh.disruptedUntil > new Date()) return;
+          // Settle while the province is still counted as disrupted, then let it produce.
+          await this.economy.settle(tx, country);
+          await tx.update(provinces).set({ disruptedUntil: null }).where(eq(provinces.id, d.id));
+        });
+        this.realtime.campaignUpdate(d.campaignId, { kind: 'province', provinceId: d.id });
+      } catch (err) {
+        this.log.warn(`endDisruptions ${d.id}: ${(err as Error).message}`);
+      }
     }
   }
 

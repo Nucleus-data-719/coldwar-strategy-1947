@@ -14,6 +14,8 @@ interface Props {
   provinces: StateProvince[];
   countries: StateCountry[];
   myCountryId: string;
+  /** Countries you are at war with: their provinces get a red outline. */
+  atWarWith: string[];
   selectedKey: string | null;
   onSelect: (key: string | null) => void;
   /** Your armies. Those with a movement are drawn as markers travelling along their route. */
@@ -44,6 +46,7 @@ export function WorldMap({
   provinces,
   countries,
   myCountryId,
+  atWarWith,
   selectedKey,
   onSelect,
   formations,
@@ -275,6 +278,7 @@ export function WorldMap({
     if (!ctx || !ready) return;
     const colorById = new Map(countries.map((c) => [c.id, hex(c.color)]));
     const stateByKey = new Map(provinces.map((p) => [p.key, p]));
+    const atWarSet = new Set(atWarWith);
     const capitalKeys = new Set(countries.map((c) => c.capitalProvinceKey).filter(Boolean));
 
     for (const geo of PROVINCES) {
@@ -283,14 +287,15 @@ export function WorldMap({
       if (!shape || !st) continue;
       const mine = st.ownerCountryId === myCountryId;
       const selected = selectedKey === geo.key;
+      const enemy = atWarSet.has(st.ownerCountryId);
 
       shape.g.clear();
       shape.g
         .poly(geo.polygon)
         .fill({ color: colorById.get(st.ownerCountryId) ?? 0x555555, alpha: mine ? 0.95 : 0.7 })
         .stroke({
-          width: selected ? 4 : mine ? 2 : 1,
-          color: selected ? 0xffffff : mine ? 0xffe27a : 0x0b1d2e,
+          width: selected ? 4 : mine ? 2 : enemy ? 2 : 1,
+          color: selected ? 0xffffff : mine ? 0xffe27a : enemy ? 0xe5483f : 0x0b1d2e,
         });
 
       const parts: string[] = [];
@@ -302,7 +307,7 @@ export function WorldMap({
       if (building > 0) parts.push(`⏳${building}`);
       shape.label.text = parts.join(' ');
     }
-  }, [ready, provinces, countries, myCountryId, selectedKey]);
+  }, [ready, provinces, countries, myCountryId, atWarWith, selectedKey]);
 
   return <div ref={hostRef} className="map-host" />;
 }

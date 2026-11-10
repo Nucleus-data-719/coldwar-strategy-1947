@@ -10,11 +10,22 @@ import {
 } from '@cw/shared';
 import { env } from '../config/env';
 import { DB, Db, DbOrTx } from '../db/db.module';
-import { buildings, formationUnits, formations, FormationRow, FormationUnitRow, NotificationRow, provinces } from '../db/schema';
+import {
+  buildings,
+  CountryRow,
+  formationUnits,
+  formations,
+  FormationRow,
+  FormationUnitRow,
+  NotificationRow,
+  provinces,
+} from '../db/schema';
 import { EconomyService } from '../economy/economy.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PlayersService } from '../players/players.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { WarsService } from '../wars/wars.service';
+import { CombatService } from './combat.service';
 
 interface MapContext {
   keyById: Map<string, string>;
@@ -37,6 +48,8 @@ export class MovementService {
     private readonly players: PlayersService,
     private readonly notifications: NotificationsService,
     private readonly realtime: RealtimeService,
+    private readonly wars: WarsService,
+    private readonly combat: CombatService,
   ) {}
 
   private async loadContext(tx: DbOrTx, campaignId: string): Promise<MapContext> {
@@ -145,13 +158,14 @@ export class MovementService {
       const route = planRoute(startKey, destKey, {
         countryId: country.id,
         ownerByKey: ctx.ownerByKey,
+        atWarWith: await this.wars.enemiesOf(tx, country.id),
         railwayKeys: ctx.railwayKeys,
         speed,
         gameSpeed: env.GAME_SPEED,
       });
       if (!route) {
         throw new BadRequestException(
-          'No route. For now armies can only travel through your own provinces; combat arrives with the next update.',
+          'No route. Armies can cross your own land and the land of countries you are at war with. Declare war first to attack.',
         );
       }
 
@@ -194,47 +208,109 @@ export class MovementService {
     return { ok: true };
   }
 
-  /** Scheduler hook: applies every leg whose arrival time has passed. */
+  /** Scheduler hook: applies every leg whose arrival time has passed, fighting battles on the way. */
   async processDue(): Promise<void> {
     const due = await this.db
-      .select({ id: formations.id, countryId: formations.countryId, campaignId: formations.campaignId })
+      .select({
+        id: formations.id,
+        countryId: formations.countryId,
+        campaignId: formations.campaignId,
+        nextProvinceId: formations.moveNextProvinceId,
+      })
       .from(formations)
       .where(and(isNotNull(formations.moveArrivesAt), lte(formations.moveArrivesAt, new Date())))
       .limit(200);
 
     for (const d of due) {
       try {
-        const notes = await this.economy.lock(d.countryId, (tx, country) => this.advance(tx, country.id, d.id));
+        // The owner of the province being entered may be an enemy: lock both countries.
+        let ownerId: string | undefined;
+        if (d.nextProvinceId) {
+          [{ ownerId }] = await this.db
+            .select({ ownerId: provinces.ownerCountryId })
+            .from(provinces)
+            .where(eq(provinces.id, d.nextProvinceId));
+        }
+        const notes = await this.economy.lockMany([d.countryId, ...(ownerId ? [ownerId] : [])], (tx, locked) =>
+          this.advance(tx, locked, d.id),
+        );
         for (const n of notes) this.notifications.publish(n);
-        this.realtime.campaignUpdate(d.campaignId, { kind: 'move' });
+        this.realtime.campaignUpdate(d.campaignId, { kind: notes.some((n) => n.type.startsWith('battle') || n.type === 'province_lost') ? 'battle' : 'move' });
       } catch (err) {
         this.log.warn(`movement ${d.id}: ${(err as Error).message}`);
       }
     }
   }
 
-  private async advance(tx: DbOrTx, countryId: string, formationId: string): Promise<NotificationRow[]> {
+  private async advance(tx: DbOrTx, locked: Map<string, CountryRow>, formationId: string): Promise<NotificationRow[]> {
     const [f] = await tx.select().from(formations).where(eq(formations.id, formationId)).for('update');
     if (!f || !f.moveArrivesAt || !f.moveNextProvinceId || f.moveArrivesAt.getTime() > Date.now()) return [];
+    const countryId = f.countryId;
+    const attacker = locked.get(countryId)!;
 
     const ctx = await this.loadContext(tx, f.campaignId);
-    const units = await tx
-      .select({ unitType: formationUnits.unitType, count: formationUnits.count })
-      .from(formationUnits)
-      .where(eq(formationUnits.formationId, f.id));
+    const atWarWith = await this.wars.enemiesOf(tx, countryId);
+    let units = await tx.select().from(formationUnits).where(eq(formationUnits.formationId, f.id));
 
-    const result = advanceMovement({
-      locationKey: ctx.keyById.get(f.provinceId)!,
-      nextKey: ctx.keyById.get(f.moveNextProvinceId)!,
-      remainingKeys: f.movePath.map((id) => ctx.keyById.get(id)!).filter(Boolean),
-      legArrivesAt: f.moveArrivesAt.getTime(),
-      now: Date.now(),
-      speed: formationSpeed(units),
-      gameSpeed: env.GAME_SPEED,
-      countryId,
-      ownerByKey: ctx.ownerByKey,
-      railwayKeys: ctx.railwayKeys,
-    });
+    const step = (locationKey: string, nextKey: string, remainingKeys: string[], legArrivesAt: number) =>
+      advanceMovement({
+        locationKey,
+        nextKey,
+        remainingKeys,
+        legArrivesAt,
+        now: Date.now(),
+        speed: formationSpeed(units),
+        gameSpeed: env.GAME_SPEED,
+        countryId,
+        ownerByKey: ctx.ownerByKey,
+        atWarWith,
+        railwayKeys: ctx.railwayKeys,
+      });
+
+    let result = step(
+      ctx.keyById.get(f.provinceId)!,
+      ctx.keyById.get(f.moveNextProvinceId)!,
+      f.movePath.map((id) => ctx.keyById.get(id)!).filter(Boolean),
+      f.moveArrivesAt.getTime(),
+    );
+
+    const notes: NotificationRow[] = [];
+    let fought = false;
+    while (result.status === 'battle') {
+      const defenderId = ctx.ownerByKey.get(result.targetKey)!;
+      const defender = locked.get(defenderId);
+      if (!defender) {
+        // A different enemy owns the next province: park the army and let the next tick lock it.
+        await tx
+          .update(formations)
+          .set({
+            provinceId: ctx.idByKey.get(result.locationKey)!,
+            moveNextProvinceId: ctx.idByKey.get(result.targetKey)!,
+            movePath: result.remainingKeys.map((k) => ctx.idByKey.get(k)!),
+            moveStartedAt: new Date(result.arrivedAt),
+            moveArrivesAt: new Date(result.arrivedAt),
+          })
+          .where(eq(formations.id, f.id));
+        return notes;
+      }
+
+      const [province] = await tx.select().from(provinces).where(eq(provinces.id, ctx.idByKey.get(result.targetKey)!));
+      const outcome = await this.combat.resolveAttack(tx, {
+        formation: f,
+        units,
+        attacker,
+        defender,
+        province,
+        arrivedAt: result.arrivedAt,
+      });
+      notes.push(...outcome.notes);
+      fought = true;
+      if (!outcome.won) return notes; // the army no longer exists
+
+      ctx.ownerByKey.set(result.targetKey, countryId);
+      units = await tx.select().from(formationUnits).where(eq(formationUnits.formationId, f.id));
+      result = step(result.locationKey, result.targetKey, result.remainingKeys, result.arrivedAt);
+    }
 
     const clear = { moveNextProvinceId: null, movePath: [] as string[], moveStartedAt: null, moveArrivesAt: null };
     const location = ctx.idByKey.get(result.locationKey)!;
@@ -251,21 +327,22 @@ export class MovementService {
           moveArrivesAt: new Date(result.legArrivesAt),
         })
         .where(eq(formations.id, f.id));
-      return [];
+      return notes;
     }
 
     await tx.update(formations).set({ provinceId: location, ...clear }).where(eq(formations.id, f.id));
-    const message =
-      result.status === 'arrived'
-        ? `${f.name} has arrived in ${place}.`
-        : `${f.name} halted in ${place}: the way ahead is no longer yours.`;
-    return [
+    if (result.status === 'arrived' && fought) return notes; // the capture message already says it
+    notes.push(
       await this.notifications.add(tx, {
         campaignId: f.campaignId,
         countryId,
         type: result.status === 'arrived' ? 'army_arrived' : 'army_halted',
-        message,
+        message:
+          result.status === 'arrived'
+            ? `${f.name} has arrived in ${place}.`
+            : `${f.name} halted in ${place}: the way ahead is closed to it.`,
       }),
-    ];
+    );
+    return notes;
   }
 }

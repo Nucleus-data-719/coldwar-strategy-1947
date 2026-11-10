@@ -7,6 +7,7 @@ import {
   PROVINCES,
   RECRUIT_UNIT,
   STARTING_GARRISON,
+  STARTING_PROVINCE_GARRISON,
   STARTING_RESOURCES,
   addResources,
   scaleSeconds,
@@ -37,6 +38,7 @@ import { EconomyService } from '../economy/economy.service';
 import { toFormationDto } from '../military/formation.mapper';
 import { PlayersService } from '../players/players.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { WarsService } from '../wars/wars.service';
 
 function toBuildingDto(b: BuildingRow): BuildingDto {
   return {
@@ -61,6 +63,7 @@ export class CampaignsService implements OnModuleInit {
     private readonly economy: EconomyService,
     private readonly players: PlayersService,
     private readonly realtime: RealtimeService,
+    private readonly wars: WarsService,
   ) {}
 
   /** Makes sure there is always a campaign to join on a fresh database. */
@@ -155,10 +158,24 @@ export class CampaignsService implements OnModuleInit {
           name: GARRISON_NAME,
         });
       }
+      // Every other province gets a small garrison, so land has to be fought for.
+      const garrisonSize = new Map<string, number>();
+      for (const geo of PROVINCES) {
+        const province = provinceByKey.get(geo.key)!;
+        garrisonSize.set(province.id, geo.isCapital ? STARTING_GARRISON : STARTING_PROVINCE_GARRISON);
+        if (!geo.isCapital) {
+          formationValues.push({
+            campaignId: campaign.id,
+            countryId: countryByCode.get(geo.countryCode)!.id,
+            provinceId: province.id,
+            name: GARRISON_NAME,
+          });
+        }
+      }
       await tx.insert(buildings).values(buildingValues);
       const formationRows = await tx.insert(formations).values(formationValues).returning();
       await tx.insert(formationUnits).values(
-        formationRows.map((f) => ({ formationId: f.id, unitType: RECRUIT_UNIT, count: STARTING_GARRISON })),
+        formationRows.map((f) => ({ formationId: f.id, unitType: RECRUIT_UNIT, count: garrisonSize.get(f.provinceId)! })),
       );
 
       return campaign;
@@ -317,6 +334,7 @@ export class CampaignsService implements OnModuleInit {
       countries: stateCountries,
       provinces: stateProvinces,
       formations: myFormationDtos,
+      atWarWith: [...(await this.wars.enemiesOf(this.db, player.countryId))],
       resources,
       serverTime: new Date().toISOString(),
     };
@@ -379,6 +397,7 @@ export class CampaignsService implements OnModuleInit {
       ownerName: owner?.name ?? 'Unknown',
       buildings: blds.map(toBuildingDto),
       formations: formationDtos,
+      disruptedUntil: province.disruptedUntil ? province.disruptedUntil.toISOString() : null,
     };
   }
 }

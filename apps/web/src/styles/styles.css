@@ -110,3 +110,20 @@ input {
   .game-body { flex-direction: column; }
   .sidebar { width: 100%; border-left: none; border-top: 1px solid var(--border); max-height: 50%; }
 }
+
+/* Week 2: war and battles */
+button.danger { background: #7a2a26; border-color: #e5483f; color: #fff; }
+button.danger:hover:not(:disabled) { background: #9a332e; }
+.warn { color: #ffb25a; }
+.page-panel { display: flex; flex-direction: column; gap: 12px; padding: 12px; max-width: 760px; overflow-y: auto; }
+.list li.col { flex-direction: column; align-items: stretch; }
+button.link.left { text-align: left; padding: 0; }
+.win { color: #6fd08c; font-weight: 600; }
+.lose { color: #e5483f; font-weight: 600; }
+.battle-report { margin-top: 8px; }
+.battle-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.battle-side { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+ul.plain { margin: 0 0 8px; padding-left: 18px; }
+.rounds { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.round .att { color: #ffe27a; }
+.round .def { color: #7fb4ff; }

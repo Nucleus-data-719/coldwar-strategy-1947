@@ -11,6 +11,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import type {
+  BattleReportData,
   BuildingStatus,
   BuildingType,
   Resources,
@@ -116,6 +117,8 @@ export const provinces = pgTable(
     defense: integer('defense').notNull().default(10),
     population: integer('population').notNull().default(0),
     production: jsonb('production').$type<Resources>().notNull(),
+    // Set when a province is captured: it produces nothing until this time.
+    disruptedUntil: ts('disrupted_until'),
   },
   (t) => [
     uniqueIndex('provinces_campaign_key_idx').on(t.campaignId, t.key),
@@ -207,6 +210,51 @@ export const notifications = pgTable(
   (t) => [index('notifications_country_idx').on(t.countryId, t.createdAt)],
 );
 
+export const wars = pgTable(
+  'wars',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    aggressorId: uuid('aggressor_id')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    defenderId: uuid('defender_id')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    declaredAt: ts('declared_at').notNull().defaultNow(),
+    endedAt: ts('ended_at'),
+  },
+  (t) => [
+    index('wars_aggressor_idx').on(t.aggressorId),
+    index('wars_defender_idx').on(t.defenderId),
+  ],
+);
+
+export const battleReports = pgTable(
+  'battle_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    attackerId: uuid('attacker_id')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    defenderId: uuid('defender_id')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    outcome: text('outcome').$type<'attacker_won' | 'defender_held' | 'walkover'>().notNull(),
+    data: jsonb('data').$type<BattleReportData>().notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('battle_reports_attacker_idx').on(t.attackerId, t.createdAt),
+    index('battle_reports_defender_idx').on(t.defenderId, t.createdAt),
+  ],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type CampaignRow = typeof campaigns.$inferSelect;
 export type CountryRow = typeof countries.$inferSelect;
@@ -216,3 +264,5 @@ export type BuildingRow = typeof buildings.$inferSelect;
 export type FormationRow = typeof formations.$inferSelect;
 export type FormationUnitRow = typeof formationUnits.$inferSelect;
 export type NotificationRow = typeof notifications.$inferSelect;
+export type WarRow = typeof wars.$inferSelect;
+export type BattleReportRow = typeof battleReports.$inferSelect;

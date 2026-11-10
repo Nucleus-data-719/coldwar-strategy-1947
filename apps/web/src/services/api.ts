@@ -1,4 +1,6 @@
 import type {
+  BattleReportDto,
+  WarDto,
   CampaignSummary,
   GameState,
   LobbyCountry,
@@ -79,6 +81,11 @@ export const api = {
     ),
   stopFormation: (campaignId: string, formationId: string) =>
     post<{ ok: true }>(`/campaigns/${campaignId}/formations/${formationId}/stop`),
+
+  wars: (campaignId: string) => request<WarDto[]>(`/campaigns/${campaignId}/wars`),
+  declareWar: (campaignId: string, countryId: string) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/wars`, { countryId }),
+  battles: (campaignId: string) => request<BattleReportDto[]>(`/campaigns/${campaignId}/battles`),
 
   notifications: (campaignId: string) => request<NotificationDto[]>(`/campaigns/${campaignId}/notifications`),
   readNotifications: (campaignId: string) => post<{ ok: true }>(`/campaigns/${campaignId}/notifications/read`),

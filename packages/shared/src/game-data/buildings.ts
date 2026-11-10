@@ -80,10 +80,10 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   fortress: {
     type: 'fortress',
     name: 'Fortress',
-    description: 'Will improve provincial defence in combat (arrives with the combat update).',
+    description: 'Defenders in this province get +25% attack and defence in battle.',
     cost: { money: 500, steel: 300 },
     buildSeconds: 5400,
-    effectActive: false,
+    effectActive: true,
     defenseBonus: 25,
   },
   railway: {

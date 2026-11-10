@@ -9,6 +9,8 @@ import { EconomyPanel } from '../features/economy/EconomyPanel';
 import { NotificationsPanel } from '../features/economy/NotificationsPanel';
 import { ArmiesPanel } from '../features/military/ArmiesPanel';
 import { MovePanel } from '../features/military/MovePanel';
+import { BattlesPanel } from '../features/military/BattlesPanel';
+import { WarsPanel } from '../features/diplomacy/WarsPanel';
 
 type Tab = 'world' | 'research' | 'economy' | 'generals' | 'diplomacy';
 const TABS: { id: Tab; label: string }[] = [
@@ -52,6 +54,8 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
       timer = window.setTimeout(() => {
         qc.invalidateQueries({ queryKey: ['state', campaignId] });
         qc.invalidateQueries({ queryKey: ['province', campaignId] });
+        qc.invalidateQueries({ queryKey: ['battles', campaignId] });
+        qc.invalidateQueries({ queryKey: ['wars', campaignId] });
       }, 200);
     };
     const onNotification = () => qc.invalidateQueries({ queryKey: ['notifications', campaignId] });
@@ -155,6 +159,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                 provinces={state.provinces}
                 countries={state.countries}
                 myCountryId={state.me.countryId}
+                atWarWith={state.atWarWith}
                 selectedKey={moveFormation ? dest : selected}
                 onSelect={handleMapSelect}
                 formations={state.formations}
@@ -202,6 +207,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                 onMove={startMove}
                 onFocus={selectProvince}
               />
+              <BattlesPanel campaignId={campaignId} myCountryId={state.me.countryId} />
               <NotificationsPanel campaignId={campaignId} />
             </aside>
           </>
@@ -211,7 +217,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
 
         {tab === 'research' && <ComingSoon title="Research" text="Five research branches, timers, universities and laboratories." />}
         {tab === 'generals' && <ComingSoon title="Generals" text="Named historical commanders, abilities, levels and collectibles." />}
-        {tab === 'diplomacy' && <ComingSoon title="Diplomacy" text="Relationships, alliances, influence and foreign assistance." />}
+        {tab === 'diplomacy' && <WarsPanel campaignId={campaignId} state={state} />}
       </div>
     </div>
   );

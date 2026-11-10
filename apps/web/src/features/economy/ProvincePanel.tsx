@@ -55,6 +55,16 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
     onError: (e) => setError((e as Error).message),
   });
 
+  const war = useMutation({
+    mutationFn: (countryId: string) => api.declareWar(campaignId, countryId),
+    onSuccess: () => {
+      setError(null);
+      qc.invalidateQueries({ queryKey: ['state', campaignId] });
+      qc.invalidateQueries({ queryKey: ['wars', campaignId] });
+    },
+    onError: (e) => setError((e as Error).message),
+  });
+
   if (!stateProvince) return null;
   if (detail.isLoading) return <div className="card">Loading province…</div>;
   if (detail.error) return <div className="card error">{(detail.error as Error).message}</div>;
@@ -84,6 +94,25 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
         Owner: {p.ownerName} · {p.terrain}
         {p.isCoastal ? ' · coastal' : ''} · defence {p.defense}
       </p>
+      {p.disruptedUntil && new Date(p.disruptedUntil).getTime() > now && (
+        <p className="warn small">
+          Occupied: produces nothing for {formatDuration((new Date(p.disruptedUntil).getTime() - now) / 1000)}.
+        </p>
+      )}
+      {!mine && (
+        <>
+          {state.atWarWith.includes(p.ownerCountryId) ? (
+            <p className="warn small">⚔ At war with {p.ownerName}. Send an army here to attack.</p>
+          ) : (
+            <>
+              {error && <p className="error small">{error}</p>}
+              <button className="danger" disabled={war.isPending} onClick={() => war.mutate(p.ownerCountryId)}>
+                Declare war on {p.ownerName}
+              </button>
+            </>
+          )}
+        </>
+      )}
       <p className="muted small">Population {p.population.toLocaleString()}</p>
 
       <h3>Production (per hour, base)</h3>
