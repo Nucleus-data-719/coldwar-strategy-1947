@@ -1,5 +1,5 @@
 import { UNITS } from './game-data/units';
-import { PROVINCE_BY_KEY } from './map-data';
+import { PROVINCE_BY_KEY, roadBetween, type RoadKind } from './map-data';
 import type { Terrain, UnitType } from './types';
 
 /** Travel-time multiplier for entering a province of this terrain. */
@@ -13,6 +13,9 @@ export const TERRAIN_MOVE_MULT: Record<Terrain, number> = {
 
 /** A leg between two provinces that both have a completed railway takes this share of the time. */
 export const RAILWAY_MOVE_MULT = 0.5;
+
+/** Highways (out of capitals) are quicker than ordinary roads; ferries are slow sea lanes. */
+export const ROAD_MOVE_MULT: Record<RoadKind, number> = { highway: 0.75, road: 1, ferry: 1.6 };
 
 /** Distance between neighbouring province centres on the placeholder map. */
 export const MAP_UNITS_PER_PROVINCE = 100;
@@ -44,12 +47,14 @@ export function legSeconds(
   speed: number,
   railway: boolean,
   gameSpeed: number,
+  roadMult = 1,
 ): number {
   const a = PROVINCE_BY_KEY[fromKey];
   const b = PROVINCE_BY_KEY[toKey];
   const distance = Math.hypot(a.center.x - b.center.x, a.center.y - b.center.y);
   let hours = ((distance / MAP_UNITS_PER_PROVINCE) * TERRAIN_MOVE_MULT[b.terrain]) / speed;
   if (railway) hours *= RAILWAY_MOVE_MULT;
+  hours *= roadMult;
   return Math.max(1, Math.round((hours * 3600) / gameSpeed));
 }
 
@@ -78,7 +83,16 @@ export interface RouteContext {
   gameSpeed: number;
   /** Ships: only coastal provinces may be entered. */
   coastalOnly?: boolean;
+  /** Land forces: move only along roads (highways are faster). Ships and aircraft ignore roads. */
+  useRoads?: boolean;
 }
+
+/** Time multiplier for a leg: the road kind for land forces, 1 for ships and aircraft. */
+export const roadMultFor = (useRoads: boolean | undefined, a: string, b: string): number => {
+  if (!useRoads) return 1;
+  const kind = roadBetween(a, b);
+  return kind ? ROAD_MOVE_MULT[kind] : 1;
+};
 
 export interface Route {
   /** Province keys from the start to the goal, inclusive. */
@@ -122,9 +136,10 @@ export function planRoute(startKey: string, goalKey: string, ctx: RouteContext):
     if (current === null) return null;
     if (current === goalKey) break;
     done.add(current);
-    for (const next of PROVINCE_BY_KEY[current].adjacent) {
+    const neighbours = ctx.useRoads ? PROVINCE_BY_KEY[current].roads : PROVINCE_BY_KEY[current].adjacent;
+    for (const next of neighbours) {
       if (done.has(next) || !canEnter(ctx, next)) continue;
-      const secs = legSeconds(current, next, ctx.speed, hasRail(ctx, current, next), ctx.gameSpeed);
+      const secs = legSeconds(current, next, ctx.speed, hasRail(ctx, current, next), ctx.gameSpeed, roadMultFor(ctx.useRoads, current, next));
       const candidate = best + secs;
       if (candidate < (dist.get(next) ?? Infinity)) {
         dist.set(next, candidate);
@@ -137,7 +152,7 @@ export function planRoute(startKey: string, goalKey: string, ctx: RouteContext):
   while (path[0] !== startKey) path.unshift(prev.get(path[0])!);
   const legs: number[] = [];
   for (let i = 0; i < path.length - 1; i++) {
-    legs.push(legSeconds(path[i], path[i + 1], ctx.speed, hasRail(ctx, path[i], path[i + 1]), ctx.gameSpeed));
+    legs.push(legSeconds(path[i], path[i + 1], ctx.speed, hasRail(ctx, path[i], path[i + 1]), ctx.gameSpeed, roadMultFor(ctx.useRoads, path[i], path[i + 1])));
   }
   return { path, legSeconds: legs, totalSeconds: legs.reduce((s, n) => s + n, 0) };
 }
@@ -158,6 +173,8 @@ export interface AdvanceInput {
   ownerByKey: ReadonlyMap<string, string>;
   atWarWith: ReadonlySet<string>;
   railwayKeys: ReadonlySet<string>;
+  /** Land forces: legs are timed by road kind. */
+  useRoads?: boolean;
 }
 
 export type AdvanceResult =
@@ -199,7 +216,7 @@ export function advanceMovement(i: AdvanceInput): AdvanceResult {
     if (path.length === 0) return { status: 'arrived', locationKey: location };
     next = path.shift()!;
     const rail = i.railwayKeys.has(location) && i.railwayKeys.has(next);
-    const legArrives = arrivedAt + legSeconds(location, next, i.speed, rail, i.gameSpeed) * 1000;
+    const legArrives = arrivedAt + legSeconds(location, next, i.speed, rail, i.gameSpeed, roadMultFor(i.useRoads, location, next)) * 1000;
     if (legArrives > i.now) {
       return {
         status: 'moving',

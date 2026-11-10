@@ -58,8 +58,8 @@ describe('AI warfare', () => {
   });
 
   it('masses troops next to a lost home province before attacking it', () => {
-    const home = PROVINCES.find((p) => p.adjacent.some((a) => PROVINCE_BY_KEY[a].countryCode !== p.countryCode))!;
-    const lost = home.adjacent.map((a) => PROVINCE_BY_KEY[a]).find((g) => g.countryCode === home.countryCode);
+    const home = PROVINCES.find((p) => p.roads.some((a) => PROVINCE_BY_KEY[a].countryCode !== p.countryCode))!;
+    const lost = home.roads.map((a) => PROVINCE_BY_KEY[a]).find((g) => g.countryCode === home.countryCode);
     if (!lost) return; // map shape has no such pair; the rule is covered above
     const plan = planAiWar({
       countryId: AI,

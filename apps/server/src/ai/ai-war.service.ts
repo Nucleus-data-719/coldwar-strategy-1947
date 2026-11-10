@@ -79,7 +79,7 @@ export class AiWarService {
         if (destKey) addThreat(destKey, power);
       } else {
         if (enemies.has(ownerByKey.get(key) ?? '')) enemyPower.set(key, (enemyPower.get(key) ?? 0) + power);
-        for (const adj of PROVINCE_BY_KEY[key]?.adjacent ?? []) addThreat(adj, power);
+        for (const adj of PROVINCE_BY_KEY[key]?.roads ?? []) addThreat(adj, power);
       }
     }
 

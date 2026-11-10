@@ -89,7 +89,7 @@ export function planAiWar(i: AiWarInput): AiWarPlan {
   // To retake a lost home province the AI first masses enough troops next to it.
   for (const [key, owner] of i.ownerByKey) {
     if (owner !== i.countryId) continue;
-    for (const toKey of PROVINCE_BY_KEY[key]?.adjacent ?? []) {
+    for (const toKey of PROVINCE_BY_KEY[key]?.roads ?? []) {
       const foe = i.ownerByKey.get(toKey);
       if (!foe || !i.enemies.has(foe) || PROVINCE_BY_KEY[toKey]?.countryCode !== i.countryCode) continue;
       const defence = i.enemyPower.get(toKey) ?? 0;
@@ -118,7 +118,7 @@ export function planAiWar(i: AiWarInput): AiWarPlan {
     const send = unitsToSend(units, AI_KEEP_POWER);
     const sendPower = unitPower(send);
     if (sendPower <= 0) continue;
-    for (const toKey of PROVINCE_BY_KEY[fromKey]?.adjacent ?? []) {
+    for (const toKey of PROVINCE_BY_KEY[fromKey]?.roads ?? []) {
       const owner = i.ownerByKey.get(toKey);
       if (!owner || !i.enemies.has(owner)) continue;
       const defence = i.enemyPower.get(toKey) ?? 0;

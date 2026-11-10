@@ -2,16 +2,19 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { getSocket } from '../services/socket';
-import { RESOURCE_COLORS, TERRAIN_COLORS, WorldMap, type MapMode } from '../features/world-map/WorldMap';
+import { DIPLOMACY_COLORS, RESOURCE_COLORS, SUPPLY_COLORS, TERRAIN_COLORS, WorldMap, type MapMode } from '../features/world-map/WorldMap';
 import { ResourceBar, useProjectedBalance } from '../features/economy/ResourceBar';
 import { ProvincePanel } from '../features/economy/ProvincePanel';
 import { EconomyPanel } from '../features/economy/EconomyPanel';
 import { Crest, Icon, type IconName } from '../components/Icon';
 import { Flag } from '../components/art';
+import { Tutorial, isTutorialDismissed, type StepId } from '../features/tutorial/Tutorial';
+import { SUPPLY_PENALTY_PERCENT } from '@cw/shared';
 import { SoundControls } from '../components/SoundControls';
 import { playSfx, sfxForNotification } from '../services/audio';
 import { verdict } from '../features/military/BattlesPanel';
 import { NotificationsPanel, useUnreadCount } from '../features/economy/NotificationsPanel';
+import { ArmyCard } from '../features/military/ArmyCard';
 import { ArmiesPanel } from '../features/military/ArmiesPanel';
 import { MovePanel } from '../features/military/MovePanel';
 import { BattlesPanel } from '../features/military/BattlesPanel';
@@ -49,10 +52,25 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('world');
   const [selected, setSelected] = useState<string | null>(null);
+  // The army selected on the map. Right-click a province to order it there.
+  const [armyId, setArmyId] = useState<string | null>(null);
   const [mapMode, setMapMode] = useState<MapMode>('political');
+  const [tutorialOpen, setTutorialOpen] = useState(() => !isTutorialDismissed(campaignId));
+  const [everSelected, setEverSelected] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<DrawerTab>('province');
   const unread = useUnreadCount(campaignId);
+
+  // The diplomacy overlay colours countries by how they feel about you.
+  const diplomacy = useQuery({
+    queryKey: ['diplomacy', campaignId],
+    queryFn: () => api.diplomacy(campaignId),
+    enabled: mapMode === 'diplomacy',
+  });
+  const relationByCountry = useMemo(
+    () => Object.fromEntries((diplomacy.data?.countries ?? []).map((c) => [c.countryId, c.stage])),
+    [diplomacy.data],
+  );
 
   // A new battle report plays a battle sound, followed by a victory or defeat sting for your own fights.
   const battles = useQuery({ queryKey: ['battles', campaignId], queryFn: () => api.battles(campaignId) });
@@ -125,12 +143,14 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
   );
 
   const moveFormation = state?.formations.find((f) => f.id === moveFormationId) ?? null;
+  const selectedArmy = state?.formations.find((f) => f.id === armyId) ?? null;
 
   const startMove = (formationId: string) => {
     setTab('world');
     setDrawerOpen(true);
     setDrawerTab('province');
     setMoveFormationId(formationId);
+    setArmyId(formationId);
     setDest(null);
     setPreviewPath(null);
   };
@@ -146,12 +166,34 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
       if (key) setDest(key);
       return;
     }
+    setArmyId(null);
     setSelected(key);
     if (key) {
+      setEverSelected(true);
       playSfx('select');
       setDrawerOpen(true);
       setDrawerTab('province');
     }
+  };
+
+  const clickArmy = (id: string) => {
+    playSfx('select');
+    cancelMove();
+    setArmyId(id);
+    setDrawerOpen(true);
+    setDrawerTab('province');
+  };
+  // Right-click: order the selected army to that province (shows the route to confirm).
+  const orderArmy = (key: string) => {
+    const id = moveFormationId ?? armyId;
+    if (!id) return;
+    setTab('world');
+    setDrawerOpen(true);
+    setDrawerTab('province');
+    setMoveFormationId(id);
+    setArmyId(id);
+    setDest(key);
+    setPreviewPath(null);
   };
 
   if (error) {
@@ -170,6 +212,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
   const selectProvince = (key: string) => {
     cancelMove();
     setSelected(key);
+    setEverSelected(true);
     setTab('world');
     setDrawerOpen(true);
     setDrawerTab('province');
@@ -191,6 +234,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
           balance={state.resources.balance}
           rates={state.resources.rates}
           shortages={state.resources.shortages}
+          breakdown={state.resources.breakdown}
           receivedAt={dataUpdatedAt || Date.now()}
           gameSpeed={state.campaign.gameSpeed}
         />
@@ -209,6 +253,15 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
           >
             <Icon name="bell" />
             {unread > 0 && <span className="badge bell-count">{unread > 99 ? '99+' : unread}</span>}
+          </button>
+          <button
+            className="ghost icon"
+            data-tip="Orders from HQ: the guided tutorial"
+            data-tip-pos="below"
+            aria-label="Show the tutorial"
+            onClick={() => setTutorialOpen(true)}
+          >
+            <Icon name="help" />
           </button>
           <SoundControls />
           <FeedbackButton
@@ -256,9 +309,14 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                 formations={state.formations}
                 clockOffsetMs={clockOffsetMs}
                 previewPath={previewPath}
+                relationByCountry={relationByCountry}
+                selectedArmyId={armyId}
+                onArmyClick={clickArmy}
+                onOrder={orderArmy}
+                supplyShort={state.resources.shortages.some((k) => (SUPPLY_PENALTY_PERCENT[k] ?? 0) > 0)}
               />
               <div className="map-modes">
-                {(['political', 'resources', 'terrain'] as MapMode[]).map((m) => (
+                {(['political', 'resources', 'terrain', 'supply', 'diplomacy'] as MapMode[]).map((m) => (
                   <button key={m} className={mapMode === m ? 'active' : ''} onClick={() => setMapMode(m)}>
                     {m[0].toUpperCase() + m.slice(1)}
                   </button>
@@ -266,7 +324,15 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
               </div>
               {mapMode !== 'political' && (
                 <div className="map-legend small">
-                  {Object.entries(mapMode === 'terrain' ? TERRAIN_COLORS : RESOURCE_COLORS).map(([name, color]) => (
+                  {Object.entries(
+                    mapMode === 'terrain'
+                      ? TERRAIN_COLORS
+                      : mapMode === 'supply'
+                        ? SUPPLY_COLORS
+                        : mapMode === 'diplomacy'
+                          ? DIPLOMACY_COLORS
+                          : RESOURCE_COLORS,
+                  ).map(([name, color]) => (
                     <span key={name}>
                       <i style={{ background: '#' + color.toString(16).padStart(6, '0') }} /> {name}
                     </span>
@@ -281,7 +347,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
               <div className={moveFormation ? 'map-hint small move' : 'map-hint muted small'}>
                 {moveFormation
                   ? 'Click the destination province'
-                  : 'Drag to pan · scroll to zoom · click a province'}
+                  : 'Drag to pan · scroll to zoom · click a province or an army · right-click to order'}
               </div>
             </div>
             {drawerOpen && (
@@ -315,6 +381,14 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                         dest={dest}
                         onPreview={setPreviewPath}
                         onClose={cancelMove}
+                      />
+                    ) : selectedArmy ? (
+                      <ArmyCard
+                        key={selectedArmy.id}
+                        campaignId={campaignId}
+                        formation={selectedArmy}
+                        onOrder={() => startMove(selectedArmy.id)}
+                        onDeselect={() => setArmyId(null)}
                       />
                     ) : selected ? (
                       <ProvincePanel
@@ -372,6 +446,22 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
           </div>
         )}
       </div>
+
+      <Tutorial
+        campaignId={campaignId}
+        state={state}
+        hasSelected={everSelected}
+        open={tutorialOpen}
+        onOpenChange={setTutorialOpen}
+        onShow={(id: StepId) => {
+          const capital = myCountry?.capitalProvinceKey;
+          if (id === 'select' || id === 'build') {
+            if (capital) selectProvince(capital);
+          } else if (id === 'war') {
+            setTab('diplomacy');
+          }
+        }}
+      />
     </div>
   );
 }

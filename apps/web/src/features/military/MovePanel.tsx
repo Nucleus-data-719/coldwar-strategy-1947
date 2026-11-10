@@ -4,7 +4,9 @@ import {
   PROVINCE_BY_KEY,
   UNITS,
   formatDuration,
+  canOccupyLand,
   formationSpeed,
+  isNavalFormation,
   planRoute,
   type FormationDto,
   type GameState,
@@ -64,8 +66,11 @@ export function MovePanel({ campaignId, state, formation, dest, onPreview, onClo
             railwayKeys,
             speed,
             gameSpeed: state.campaign.gameSpeed,
+            coastalOnly: isNavalFormation(sendUnits),
+            useRoads: !isNavalFormation(sendUnits) && canOccupyLand(sendUnits),
           })
         : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [dest, startKey, speed, ownerByKey, state.atWarWith, railwayKeys, state.me.countryId, state.campaign.gameSpeed],
   );
 
@@ -99,13 +104,23 @@ export function MovePanel({ campaignId, state, formation, dest, onPreview, onClo
     onError: (e) => setError((e as Error).message),
   });
 
+  const stop = useMutation({
+    mutationFn: () => api.stopFormation(campaignId, formation.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['state', campaignId] });
+      onClose();
+    },
+    onError: (e) => setError((e as Error).message),
+  });
+  const attacking = !!dest && !!route && ownerByKey.get(dest) !== state.me.countryId;
+
   const remainingLeg = formation.movement ? Math.max(0, (Date.parse(formation.movement.arrivesAt) - now) / 1000) : 0;
   const sameSpot = !!dest && dest === startKey && !moving;
 
   return (
     <div className="card move-panel">
       <div className="row between">
-        <h2>Move army</h2>
+        <h2>{attacking ? 'Attack' : 'Move army'}</h2>
         <button className="link" onClick={onClose}>
           Cancel
         </button>
@@ -149,7 +164,7 @@ export function MovePanel({ campaignId, state, formation, dest, onPreview, onClo
       <h3>Destination</h3>
       {!dest && (
         <p className="muted small">
-          Click a province on the map. Armies cross your own land and the land of countries you are at war with.
+          Click a province on the map. Land forces follow the roads, across your own land and the land of countries you are at war with.
         </p>
       )}
       {sameSpot && <p className="error small">The army is already there. Pick a different province.</p>}
@@ -186,8 +201,13 @@ export function MovePanel({ campaignId, state, formation, dest, onPreview, onClo
           move.mutate();
         }}
       >
-        Confirm move
+        {attacking ? 'Confirm attack' : 'Confirm move'}
       </button>
+      {moving && (
+        <button className="danger" disabled={stop.isPending} onClick={() => stop.mutate()}>
+          Cancel orders
+        </button>
+      )}
     </div>
   );
 }

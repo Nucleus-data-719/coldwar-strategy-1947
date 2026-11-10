@@ -1,5 +1,6 @@
 import {
   RESOURCE_KEYS,
+  type RateBreakdown,
   RESOURCE_LABELS,
   SUPPLY_PENALTY_PERCENT,
   applyRates,
@@ -14,6 +15,8 @@ interface Props {
   rates: Resources;
   /** Resources that ran out while still being used up. */
   shortages?: ResourceKey[];
+  /** Where each rate comes from, shown in the tooltips. */
+  breakdown?: RateBreakdown;
   /** When `balance` was received from the server (ms). */
   receivedAt: number;
   gameSpeed: number;
@@ -27,6 +30,22 @@ export function useProjectedBalance({ balance, rates, receivedAt, gameSpeed }: P
 
 const fmt = (n: number) => Math.floor(n).toLocaleString();
 const fmtRate = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}/h`;
+
+const sign = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}`;
+
+/** The arithmetic behind one rate, as lines of text. */
+function mathLines(k: ResourceKey, b?: RateBreakdown): string[] {
+  if (!b) return [];
+  const lines: string[] = [];
+  lines.push(`${sign(b.provinces[k])} from ${b.provinceCount} province${b.provinceCount === 1 ? '' : 's'}`);
+  if (Math.abs(b.buildings[k]) > 0.005) lines.push(`${sign(b.buildings[k])} from buildings`);
+  if (Math.abs(b.research[k]) > 0.005) lines.push(`${sign(b.research[k])} from research (+${b.researchPercent}%)`);
+  if (b.upkeep[k] > 0.005) lines.push(`−${b.upkeep[k].toFixed(1)} army upkeep`);
+  lines.push(`= ${sign(b.net[k])} per hour`);
+  if (b.disruptedCount > 0 && (k === 'money' || k === 'food' || k === 'manpower'))
+    lines.push(`(${b.disruptedCount} captured province${b.disruptedCount === 1 ? ' is' : 's are'} not producing yet)`);
+  return lines;
+}
 
 const USE: Record<ResourceKey, string> = {
   money: 'Pays for buildings, units and research.',
@@ -48,7 +67,8 @@ export function ResourceBar(props: Props) {
         const tip = [
           RESOURCE_LABELS[k],
           USE[k],
-          `Stockpile ${fmt(projected[k])} · net ${fmtRate(props.rates[k])}`,
+          `Stockpile ${fmt(projected[k])}`,
+          ...mathLines(k, props.breakdown),
           short
             ? `OUT OF STOCK.${SUPPLY_PENALTY_PERCENT[k] ? ` Your armies fight at -${SUPPLY_PENALTY_PERCENT[k]}% attack and defence until it recovers.` : ''}`
             : '',

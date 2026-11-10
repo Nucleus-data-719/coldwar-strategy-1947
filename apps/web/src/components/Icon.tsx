@@ -75,6 +75,13 @@ const PATHS: Record<string, ReactNode> = {
       <circle cx="17.5" cy="16" r="2.5" />
     </>
   ),
+  help: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.6 2.6 0 1 1 3.6 2.4c-.8.4-1.1.9-1.1 1.8M12 17v.3" />
+    </>
+  ),
+  check: <path d="M5 12.5l4.5 4.5L19 7" />,
   star: <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" />,
 };
 

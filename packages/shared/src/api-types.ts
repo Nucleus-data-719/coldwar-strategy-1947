@@ -99,11 +99,28 @@ export interface GameState {
   formations: FormationDto[];
   /** Ids of the countries you are at war with. */
   atWarWith: string[];
-  resources: { balance: Resources; rates: Resources; shortages: ResourceKey[] };
+  resources: { balance: Resources; rates: Resources; shortages: ResourceKey[]; breakdown: RateBreakdown };
   research: ResearchStateDto;
   /** A capital move in progress, if any. */
   capitalMove: { provinceKey: string; completesAt: string } | null;
   serverTime: string;
+}
+
+/** Where each hourly rate comes from. `net` is what the top bar shows. */
+export interface RateBreakdown {
+  /** What your provinces produce on their own. */
+  provinces: Resources;
+  /** Extra from completed buildings such as Local Factories. */
+  buildings: Resources;
+  /** Extra from industry research (money and strategic resources only). */
+  research: Resources;
+  /** Hourly cost of keeping units. */
+  upkeep: Resources;
+  provinceCount: number;
+  /** Captured provinces that are not producing yet. */
+  disruptedCount: number;
+  researchPercent: number;
+  net: Resources;
 }
 
 export interface MovementDto {

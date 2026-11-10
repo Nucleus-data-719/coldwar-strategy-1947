@@ -10,6 +10,7 @@ import {
   unitUpkeepPerHour,
   type BuildingLike,
   INDUSTRIAL_RESOURCES,
+  type RateBreakdown,
   type ResourceKey,
   type Resources,
 } from '@cw/shared';
@@ -41,10 +42,16 @@ export class EconomyService {
 
   /** Hourly net production (production minus unit upkeep). Can be negative. */
   async computeRates(db: DbOrTx, countryId: string): Promise<Resources> {
+    return (await this.computeBreakdown(db, countryId)).net;
+  }
+
+  /** The hourly rates split into the parts that explain them, for the numbers shown in the top bar. */
+  async computeBreakdown(db: DbOrTx, countryId: string): Promise<RateBreakdown> {
     const allOwned = await db.select().from(provinces).where(eq(provinces.ownerCountryId, countryId));
     // A freshly captured province produces nothing until its disruption ends.
     const owned = allOwned.filter((p) => !p.disruptedUntil);
-    let total = emptyResources();
+    let provincesBase = emptyResources();
+    let withBuildings = emptyResources();
 
     if (owned.length > 0) {
       const blds = await db
@@ -63,31 +70,48 @@ export class EconomyService {
         byProvince.set(b.provinceId, list);
       }
       for (const p of owned) {
-        total = addResources(total, provinceProduction(p.production, byProvince.get(p.id) ?? []));
+        provincesBase = addResources(provincesBase, p.production);
+        withBuildings = addResources(withBuildings, provinceProduction(p.production, byProvince.get(p.id) ?? []));
       }
     }
+    const buildingBonus = subtractResources(withBuildings, provincesBase);
 
     // Research: industry techs raise industrial output (money and strategic resources), not food or manpower.
     const bonus = (await loadResearch(db, countryId)).summary.productionPercent;
-    if (bonus > 0) for (const k of INDUSTRIAL_RESOURCES) total[k] *= 1 + bonus / 100;
+    const researchBonus = emptyResources();
+    if (bonus > 0) for (const k of INDUSTRIAL_RESOURCES) researchBonus[k] = withBuildings[k] * (bonus / 100);
 
     const units = await db
       .select({ unitType: formationUnits.unitType, count: formationUnits.count })
       .from(formationUnits)
       .innerJoin(formations, eq(formations.id, formationUnits.formationId))
       .where(eq(formations.countryId, countryId));
+    const upkeep = unitUpkeepPerHour(units);
 
-    return subtractResources(total, unitUpkeepPerHour(units));
+    const net = subtractResources(addResources(withBuildings, researchBonus), upkeep);
+    return {
+      provinces: provincesBase,
+      buildings: buildingBonus,
+      research: researchBonus,
+      upkeep,
+      provinceCount: owned.length,
+      disruptedCount: allOwned.length - owned.length,
+      researchPercent: bonus,
+      net,
+    };
   }
 
   /** Current balance and rates without writing anything. */
-  async getLive(countryId: string): Promise<{ balance: Resources; rates: Resources; shortages: ResourceKey[] }> {
+  async getLive(
+    countryId: string,
+  ): Promise<{ balance: Resources; rates: Resources; shortages: ResourceKey[]; breakdown: RateBreakdown }> {
     const [country] = await this.db.select().from(countries).where(eq(countries.id, countryId));
     if (!country) throw new NotFoundException('Country not found');
-    const rates = await this.computeRates(this.db, countryId);
+    const breakdown = await this.computeBreakdown(this.db, countryId);
+    const rates = breakdown.net;
     const elapsed = ((Date.now() - country.resourcesUpdatedAt.getTime()) / 1000) * env.GAME_SPEED;
     const balance = applyRates(rowToResources(country), rates, elapsed);
-    return { balance, rates, shortages: shortagesOf(balance, rates) };
+    return { balance, rates, shortages: shortagesOf(balance, rates), breakdown };
   }
 
   /** Brings the stored balance up to date. Call inside `lock`, before anything changes the rates. */

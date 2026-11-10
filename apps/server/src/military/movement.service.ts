@@ -29,6 +29,9 @@ import { RealtimeService } from '../realtime/realtime.service';
 import { WarsService } from '../wars/wars.service';
 import { CombatService } from './combat.service';
 
+/** Land forces move along roads; ships and aircraft are not bound to them. */
+const usesRoads = (units: { unitType: UnitType; count: number }[]) => !isNavalFormation(units) && canOccupyLand(units);
+
 interface MapContext {
   keyById: Map<string, string>;
   idByKey: Map<string, string>;
@@ -181,12 +184,13 @@ export class MovementService {
       speed,
       gameSpeed: env.GAME_SPEED,
       coastalOnly: isNavalFormation(units),
+      useRoads: usesRoads(units),
     });
     if (!route) {
       throw new BadRequestException(
         isNavalFormation(units)
           ? 'No sea route. Ships can only sail between coastal provinces.'
-          : 'No route. Armies can cross your own land and the land of countries you are at war with. Declare war first to attack.',
+          : 'No route. Land forces travel only along roads, across your own land and the land of countries you are at war with. Declare war first to attack.',
       );
     }
 
@@ -208,7 +212,11 @@ export class MovementService {
     return { formationId: target.id, etaSeconds: route.totalSeconds };
   }
 
-  /** Player command: halt after the current leg. */
+  /**
+   * Player command: cancel the order. An army heading into its own land finishes the current leg and halts.
+   * An army about to attack turns back instead: it returns to the province it left, taking as long as it
+   * has already marched.
+   */
   async stop(userId: string, campaignId: string, formationId: string) {
     const player = await this.players.require(userId, campaignId);
     await this.economy.lock(player.countryId, async (tx, country) => {
@@ -218,8 +226,25 @@ export class MovementService {
         .where(and(eq(formations.id, formationId), eq(formations.campaignId, campaignId)))
         .for('update');
       if (!formation || formation.countryId !== country.id) throw new NotFoundException('Army not found');
-      if (!formation.moveArrivesAt) throw new BadRequestException('That army is not moving');
-      await tx.update(formations).set({ movePath: [] }).where(eq(formations.id, formation.id));
+      if (!formation.moveArrivesAt || !formation.moveNextProvinceId) throw new BadRequestException('That army is not moving');
+
+      const [next] = await tx.select({ owner: provinces.ownerCountryId }).from(provinces).where(eq(provinces.id, formation.moveNextProvinceId));
+      if (next?.owner === country.id || !formation.moveStartedAt) {
+        await tx.update(formations).set({ movePath: [] }).where(eq(formations.id, formation.id));
+        return;
+      }
+      // Retreat: the way back takes as long as the way already marched.
+      const now = Date.now();
+      const marched = Math.max(1000, Math.min(now - formation.moveStartedAt.getTime(), formation.moveArrivesAt.getTime() - formation.moveStartedAt.getTime()));
+      await tx
+        .update(formations)
+        .set({
+          moveNextProvinceId: formation.provinceId,
+          movePath: [],
+          moveStartedAt: new Date(now),
+          moveArrivesAt: new Date(now + marched),
+        })
+        .where(eq(formations.id, formation.id));
     });
     this.realtime.campaignUpdate(campaignId, { kind: 'move' });
     return { ok: true };
@@ -282,6 +307,7 @@ export class MovementService {
         ownerByKey: ctx.ownerByKey,
         atWarWith,
         railwayKeys: ctx.railwayKeys,
+        useRoads: usesRoads(units),
       });
 
     let result = step(

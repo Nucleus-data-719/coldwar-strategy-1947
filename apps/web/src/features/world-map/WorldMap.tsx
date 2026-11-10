@@ -1,17 +1,37 @@
 import { useEffect, useRef, useState } from 'react';
-import { Application, Container, Graphics, Text } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Text } from 'pixi.js';
+import { TOKEN_BOTTOM, TOKEN_HALF_WIDTH, TOKEN_TOP, drawToken, formationClass } from './army-token';
 import { drawResourceIcon, resourceIconsFor } from './resource-icons';
 import {
   MAP_HEIGHT,
   MAP_WIDTH,
   PROVINCES,
   PROVINCE_BY_KEY,
+  ROADS,
   type FormationDto,
   type StateCountry,
   type StateProvince,
 } from '@cw/shared';
 
-export type MapMode = 'political' | 'resources' | 'terrain';
+export type MapMode = 'political' | 'resources' | 'terrain' | 'supply' | 'diplomacy';
+
+/** Supply overlay: are your armies being fed and fuelled? Other countries are dimmed. */
+export const SUPPLY_COLORS: Record<string, number> = {
+  'Armies supplied': 0x4caf6f,
+  'Armies short of supplies': 0xe5483f,
+  'Your provinces, no army': 0x2f5a73,
+};
+
+/** Diplomacy overlay: how each country feels about you. */
+export const DIPLOMACY_COLORS: Record<string, number> = {
+  You: 0xd4a73a,
+  Allied: 0x3fbf6f,
+  Friendly: 0x8fd8a0,
+  Neutral: 0x6b7a8a,
+  Unfriendly: 0xe0a040,
+  Hostile: 0xe06a3a,
+  'At war': 0xe5483f,
+};
 
 export const TERRAIN_COLORS: Record<string, number> = {
   plains: 0x93b565,
@@ -63,6 +83,16 @@ interface Props {
   clockOffsetMs: number;
   /** Route being previewed while giving a move order. */
   previewPath: string[] | null;
+  /** Diplomacy overlay: relation stage of each country towards you (allied, friendly, neutral, ...). */
+  relationByCountry?: Record<string, string>;
+  /** Supply overlay: true when some resource your armies need has run out. */
+  supplyShort?: boolean;
+  /** The army selected for orders, drawn with a gold frame. */
+  selectedArmyId?: string | null;
+  /** An army figure on the map was clicked. */
+  onArmyClick?: (id: string) => void;
+  /** Right-click on a province: order the selected army there. */
+  onOrder?: (key: string) => void;
 }
 
 interface Shape {
@@ -84,48 +114,7 @@ const hex = (c: string) => parseInt(c.replace('#', ''), 16);
 const centerOf = (key: string) => PROVINCE_BY_KEY[key].center;
 
 
-type UnitClass = 'infantry' | 'armor' | 'artillery' | 'air' | 'naval';
-const CLASS_OF: Record<string, UnitClass> = {
-  infantry: 'infantry', artillery: 'artillery', light_tank: 'armor', heavy_tank: 'armor',
-  fighter: 'air', bomber: 'air', air_support: 'air',
-  submarine: 'naval', destroyer: 'naval', cruiser: 'naval', battleship: 'naval',
-};
-
-/** The kind of unit that makes up most of a formation decides its map symbol. */
-function formationClass(units: { unitType: string; count: number }[]): UnitClass {
-  const totals: Record<UnitClass, number> = { infantry: 0, armor: 0, artillery: 0, air: 0, naval: 0 };
-  for (const u of units) totals[CLASS_OF[u.unitType] ?? 'infantry'] += u.count;
-  return (Object.keys(totals) as UnitClass[]).sort((a, b) => totals[b] - totals[a])[0];
-}
-
-/** A NATO-style army counter: dark plate, owner-colour band, unit symbol. Centre x,y; scaled by k. */
-function drawCounter(g: Graphics, x: number, y: number, k: number, owner: number, cls: UnitClass) {
-  const w = 34 * k;
-  const h = 20 * k;
-  g.roundRect(x - w / 2, y - h / 2, w, h, 3 * k).fill({ color: 0x101b27 }).stroke({ width: 1.6 * k, color: 0xffe27a });
-  g.rect(x - w / 2 + 1.5 * k, y - h / 2 + 1.5 * k, w - 3 * k, 3.5 * k).fill({ color: owner });
-  const sx = x - 9 * k;
-  const sy = y + 2 * k;
-  const line = { width: 1.4 * k, color: 0xffffff };
-  switch (cls) {
-    case 'infantry':
-      g.moveTo(sx - 6 * k, sy - 4 * k).lineTo(sx + 6 * k, sy + 4 * k).moveTo(sx + 6 * k, sy - 4 * k).lineTo(sx - 6 * k, sy + 4 * k).stroke(line);
-      break;
-    case 'armor':
-      g.ellipse(sx, sy, 6 * k, 3.6 * k).stroke(line);
-      break;
-    case 'artillery':
-      g.circle(sx, sy, 2.4 * k).fill({ color: 0xffffff });
-      break;
-    case 'air':
-      g.poly([sx, sy - 5 * k, sx + 7 * k, sy + 4 * k, sx, sy + 1.5 * k, sx - 7 * k, sy + 4 * k]).fill({ color: 0xffffff });
-      break;
-    case 'naval':
-      g.moveTo(sx, sy - 5 * k).lineTo(sx, sy + 3 * k).moveTo(sx - 4 * k, sy - 2 * k).lineTo(sx + 4 * k, sy - 2 * k).stroke(line);
-      g.moveTo(sx + 5 * k, sy + 1 * k).arc(sx, sy + 1 * k, 5 * k, 0, Math.PI).stroke(line);
-      break;
-  }
-}
+const stageLabel = (stage?: string) => (stage === 'war' ? 'At war' : stage ? stage[0].toUpperCase() + stage.slice(1) : 'Neutral');
 
 /** Small terrain marks on a province so the map reads as a map and not a colour chart. */
 function drawTerrainMarks(g: Graphics, polygon: number[], terrain: string, seed: number) {
@@ -182,6 +171,11 @@ export function WorldMap({
   formations,
   clockOffsetMs,
   previewPath,
+  relationByCountry,
+  supplyShort,
+  selectedArmyId,
+  onArmyClick,
+  onOrder,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const ctxRef = useRef<Ctx | null>(null);
@@ -190,6 +184,12 @@ export function WorldMap({
   const formationsRef = useRef(formations);
   const offsetRef = useRef(clockOffsetMs);
   const previewRef = useRef(previewPath);
+  const selectedArmyRef = useRef(selectedArmyId);
+  const onArmyClickRef = useRef(onArmyClick);
+  const onOrderRef = useRef(onOrder);
+  selectedArmyRef.current = selectedArmyId;
+  onArmyClickRef.current = onArmyClick;
+  onOrderRef.current = onOrder;
   const colorsRef = useRef(new Map<string, number>());
   colorsRef.current = new Map(countries.map((c) => [c.id, parseInt(c.color.replace('#', ''), 16)]));
   onSelectRef.current = onSelect;
@@ -243,9 +243,36 @@ export function WorldMap({
           g.on('pointertap', () => {
             if (!dragMoved.current) onSelectRef.current(geo.key);
           });
+          g.on('rightclick', () => onOrderRef.current?.(geo.key));
           world.addChild(g);
           shapes.set(geo.key, { g, label: null as unknown as Text, nameLabel: null as unknown as Text, icons: null });
         }
+        // Roads: land forces travel only along these. Highways run out of capitals; ferries are long sea lanes.
+        const roadsG = new Graphics();
+        roadsG.eventMode = 'none';
+        world.addChild(roadsG);
+        for (const kind of ['road', 'highway', 'ferry'] as const) {
+          for (const r of ROADS) {
+            if (r.kind !== kind) continue;
+            const a = centerOf(r.a);
+            const b = centerOf(r.b);
+            if (kind === 'ferry') {
+              const len = Math.hypot(b.x - a.x, b.y - a.y);
+              for (let d = 0; d < len; d += 15) {
+                const e = Math.min(len, d + 8);
+                roadsG.moveTo(a.x + ((b.x - a.x) * d) / len, a.y + ((b.y - a.y) * d) / len);
+                roadsG.lineTo(a.x + ((b.x - a.x) * e) / len, a.y + ((b.y - a.y) * e) / len);
+              }
+            } else {
+              roadsG.moveTo(a.x, a.y).lineTo(b.x, b.y);
+            }
+          }
+          if (kind === 'road') roadsG.stroke({ width: 1.6, color: 0xf1ead2, alpha: 0.55 });
+          else if (kind === 'highway') roadsG.stroke({ width: 2.8, color: 0xffe9a0, alpha: 0.8 });
+          else roadsG.stroke({ width: 1.4, color: 0x9fd0ff, alpha: 0.65 });
+        }
+        for (const geo of PROVINCES) roadsG.circle(geo.center.x, geo.center.y, 2.6).fill({ color: 0xf1ead2, alpha: 0.8 });
+
         // Labels are added after all shapes so neighbours never paint over them.
         for (const geo of PROVINCES) {
           const label = new Text({
@@ -332,11 +359,12 @@ export function WorldMap({
 
         // Army layer: route preview, travelling markers. Redrawn every frame from server times.
         const armyLayer = new Container();
-        armyLayer.eventMode = 'none';
+        armyLayer.eventMode = 'passive';
         world.addChild(armyLayer);
         const routeG = new Graphics();
         armyLayer.addChild(routeG);
-        const armyTexts = new Map<string, Text>();
+        routeG.eventMode = 'none';
+        const tokens = new Map<string, { box: Container; g: Graphics; label: Text; sig: string }>();
 
         const drawArmies = () => {
           const now = Date.now() + offsetRef.current;
@@ -404,31 +432,52 @@ export function WorldMap({
               const i = slots.get(f.provinceKey) ?? 0;
               slots.set(f.provinceKey, i + 1);
               x = c.x + i * 38 * k;
-              y = c.y + 24 * k;
+              y = c.y + 42 * k;
             }
-            drawCounter(routeG, x, y, k, colors.get(f.countryId) ?? 0x888888, formationClass(f.units));
-
-            let label = armyTexts.get(f.id);
-            if (!label) {
-              label = new Text({
+            const cls = formationClass(f.units);
+            const ownerColor = colors.get(f.countryId) ?? 0x888888;
+            const isSelected = selectedArmyRef.current === f.id;
+            let tk = tokens.get(f.id);
+            if (!tk) {
+              const box = new Container();
+              box.eventMode = 'static';
+              box.cursor = 'pointer';
+              box.hitArea = new Rectangle(-TOKEN_HALF_WIDTH, TOKEN_TOP, TOKEN_HALF_WIDTH * 2, TOKEN_BOTTOM - TOKEN_TOP);
+              const id = f.id;
+              box.on('pointertap', (e) => {
+                e.stopPropagation();
+                if (!dragMoved.current) onArmyClickRef.current?.(id);
+              });
+              const g = new Graphics();
+              const label = new Text({
                 text: '',
                 style: { fontSize: 12, fill: 0xffffff, fontFamily: 'sans-serif', fontWeight: 'bold' },
               });
               label.anchor.set(0.5);
-              armyLayer.addChild(label);
-              armyTexts.set(f.id, label);
+              label.position.set(8, 0.5);
+              box.addChild(g);
+              box.addChild(label);
+              armyLayer.addChild(box);
+              tk = { box, g, label, sig: '' };
+              tokens.set(f.id, tk);
             }
+            const sig = `${cls}|${ownerColor}|${isSelected}`;
+            if (tk.sig !== sig) {
+              tk.g.clear();
+              drawToken(tk.g, ownerColor, cls, isSelected);
+              tk.sig = sig;
+            }
+            tk.box.position.set(x, y);
+            tk.box.scale.set(k);
             const total = String(f.units.reduce((s, u) => s + u.count, 0));
-            if (label.text !== total) label.text = total;
-            label.scale.set(k);
-            label.position.set(x + 9 * k, y);
+            if (tk.label.text !== total) tk.label.text = total;
             seen.add(f.id);
           }
-          for (const [id, label] of armyTexts) {
+          for (const [id, tk] of tokens) {
             if (!seen.has(id)) {
-              armyLayer.removeChild(label);
-              label.destroy();
-              armyTexts.delete(id);
+              armyLayer.removeChild(tk.box);
+              tk.box.destroy({ children: true });
+              tokens.delete(id);
             }
           }
         };
@@ -441,13 +490,46 @@ export function WorldMap({
         let lastY = 0;
         let startX = 0;
         let startY = 0;
+        const pointers = new Map<number, { x: number; y: number }>();
+        let pinchDist = 0;
+        const zoomAt = (cx: number, cy: number, factor: number) => {
+          const rect = canvas.getBoundingClientRect();
+          const mx = cx - rect.left;
+          const my = cy - rect.top;
+          const old = world.scale.x;
+          const next = Math.min(6, Math.max(0.3, old * factor));
+          const k = next / old;
+          world.x = mx - (mx - world.x) * k;
+          world.y = my - (my - world.y) * k;
+          world.scale.set(next);
+        };
+        const pinchState = () => {
+          const [p1, p2] = [...pointers.values()];
+          return { d: Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1, x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+        };
         const down = (e: PointerEvent) => {
+          if (e.button !== 0) return; // right-click is for orders, not panning
+          pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          if (pointers.size === 2) {
+            // Two fingers: pinch to zoom.
+            dragging = false;
+            dragMoved.current = true;
+            pinchDist = pinchState().d;
+            return;
+          }
           dragging = true;
           dragMoved.current = false;
           lastX = startX = e.clientX;
           lastY = startY = e.clientY;
         };
         const move = (e: PointerEvent) => {
+          if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          if (pointers.size === 2) {
+            const p = pinchState();
+            zoomAt(p.x, p.y, p.d / pinchDist);
+            pinchDist = p.d;
+            return;
+          }
           if (!dragging) return;
           if (Math.hypot(e.clientX - startX, e.clientY - startY) > 4) dragMoved.current = true;
           if (dragMoved.current) {
@@ -457,24 +539,20 @@ export function WorldMap({
           lastX = e.clientX;
           lastY = e.clientY;
         };
-        const up = () => {
+        const up = (e: PointerEvent) => {
+          pointers.delete(e.pointerId);
           dragging = false;
         };
         const wheel = (e: WheelEvent) => {
           e.preventDefault();
-          const rect = canvas.getBoundingClientRect();
-          const mx = e.clientX - rect.left;
-          const my = e.clientY - rect.top;
-          const old = world.scale.x;
-          const next = Math.min(6, Math.max(0.3, old * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
-          const k = next / old;
-          world.x = mx - (mx - world.x) * k;
-          world.y = my - (my - world.y) * k;
-          world.scale.set(next);
+          zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.12 : 1 / 1.12);
         };
+        const noMenu = (e: Event) => e.preventDefault();
+        canvas.addEventListener('contextmenu', noMenu);
         canvas.addEventListener('pointerdown', down);
         window.addEventListener('pointermove', move);
         window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
         canvas.addEventListener('wheel', wheel, { passive: false });
 
         // The side drawer opens and closes without a window resize, so watch the map's own box.
@@ -489,9 +567,11 @@ export function WorldMap({
             resizeObserver.disconnect();
             app.ticker.remove(drawArmies);
             app.ticker.remove(syncLabels);
+            canvas.removeEventListener('contextmenu', noMenu);
             canvas.removeEventListener('pointerdown', down);
             window.removeEventListener('pointermove', move);
             window.removeEventListener('pointerup', up);
+            window.removeEventListener('pointercancel', up);
             canvas.removeEventListener('wheel', wheel);
           },
         };
@@ -536,7 +616,19 @@ export function WorldMap({
               ? (TERRAIN_COLORS[geo.terrain] ?? 0x555555)
               : mode === 'resources'
                 ? (RESOURCE_COLORS[dominantResource(geo.key)] ?? 0x555555)
-                : (colorById.get(st.ownerCountryId) ?? 0x555555),
+                : mode === 'supply'
+                  ? mine
+                    ? st.unitCount > 0
+                      ? supplyShort
+                        ? SUPPLY_COLORS['Armies short of supplies']
+                        : SUPPLY_COLORS['Armies supplied']
+                      : SUPPLY_COLORS['Your provinces, no army']
+                    : 0x222d38
+                  : mode === 'diplomacy'
+                    ? mine
+                      ? DIPLOMACY_COLORS.You
+                      : (DIPLOMACY_COLORS[stageLabel(relationByCountry?.[st.ownerCountryId])] ?? DIPLOMACY_COLORS.Neutral)
+                    : (colorById.get(st.ownerCountryId) ?? 0x555555),
           alpha: mode === 'political' ? (mine ? 0.95 : 0.7) : mine ? 0.95 : 0.85,
         })
         .stroke({
@@ -555,7 +647,7 @@ export function WorldMap({
       if (building > 0) parts.push(`⏳${building}`);
       shape.label.text = parts.join(' ');
     }
-  }, [ready, provinces, countries, myCountryId, mode, atWarWith, selectedKey]);
+  }, [ready, provinces, countries, myCountryId, mode, atWarWith, selectedKey, relationByCountry, supplyShort]);
 
   return <div ref={hostRef} className="map-host" />;
 }

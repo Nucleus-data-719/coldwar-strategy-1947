@@ -214,3 +214,22 @@ Done when: you capture an AI province, its income moves to you (after the occupa
 * To use recorded music or effects later, drop files in `apps/web/public/audio/` and replace the matching recipe in `audio.ts`.
 
 No database changes this week.
+
+## Week 11 - Onboarding and clarity
+
+* **Tutorial "Orders from HQ"** (`features/tutorial/Tutorial.tsx`): six steps (look at your capital, build a Recruitment Center, train soldiers, send an army, declare war, capture a province). Each step ticks itself by reading the real game state, no "next" buttons. "Show me" buttons lead the player to the right place. Progress is remembered per campaign in the browser; the ? button in the top bar reopens it.
+* **Numbers explain themselves**: the server now returns a rate breakdown (`resources.breakdown`). Hover any resource in the top bar to see: stockpile, income from provinces, buildings, research, army upkeep, and the net rate per hour. Captured provinces that are not producing yet are mentioned.
+* **Map overlays**: two new map modes. *Supply* shows whether armies are supplied or short (a resource that causes a combat penalty has run out). *Diplomacy* colours each country by how it feels about you (allied, friendly, neutral, unfriendly, hostile, at war).
+* **Alerts**: grouped runs of the same kind ("Show 3 earlier like this"), type tags, relative times, unread-only filter, mark all read.
+* **Phone**: pinch-to-zoom on the map, larger touch targets, bottom-sheet details panel with a handle, tutorial collapsed by default, scrollable map-mode pill.
+* No database changes. Restart the server (the state response gained a field).
+
+## Week 12 - Roads and land troops on the map
+
+* **Roads**: the map generator now builds a road network (206 roads between 166 provinces; run `node packages/shared/scripts/generate-map.mjs` to rebuild). Roads come from a sparse "relative neighbourhood" rule, with at most two crossings between any two countries (so borders have chokepoints), every country connected inside itself, and the whole world as connected as before. Highways run out of capitals (25% faster), ordinary roads, and ferries are the long sea lanes (slower). Rendered on the map as light lines (highways thicker, ferries dashed blue).
+* **Land forces travel only along roads** (server and browser use the same `planRoute`). Ships and aircraft are not bound to roads. The AI war planner also uses roads. Tests in `packages/shared/src/roads.test.ts`.
+* **Armies are visible on the map**: a figure (soldier with rifle, tank, field gun, aircraft, warship) on a NATO-style plate with the owner colour and unit count. Click one to select it (gold frame). The details panel shows an Army card: units, status, **Move / Attack…** and **Cancel orders**.
+* **Orders**: with an army selected, **right-click any province** to order it there (the route is previewed as a line along the roads, then confirm). Attacking an enemy province is the same order and the panel says "Attack". On a phone use the Move / Attack… button, then tap the destination.
+* **Cancel orders**: an army heading into its own land finishes the current leg and halts. An army about to attack turns back instead and returns to the province it left.
+* Not in this week: aircraft patrol and attack orders (Week 13), naval orders and ranges (Week 14), buildings drawn on provinces and enemy armies on the map (Week 15).
+* No database changes. Restart the server.
