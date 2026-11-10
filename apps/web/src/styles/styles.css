@@ -381,3 +381,24 @@ textarea.feedback { width: 100%; min-height: 90px; resize: vertical; }
 }
 
 .map-open { position: absolute; right: var(--s-3); top: var(--s-3); z-index: 5; box-shadow: var(--shadow-1); }
+
+/* ---- Week 10: art ------------------------------------------------------- */
+.with-icon { display: inline-flex; align-items: center; gap: 6px; }
+.unit-icon, .building-icon { color: #9db2c7; flex-shrink: 0; }
+.unit-chip { display: inline-flex; align-items: center; gap: 4px; margin: 0 10px 2px 0; }
+.unit-chip .unit-icon { color: var(--accent); }
+.with-icon .building-icon { color: var(--accent); }
+.flag { border-radius: 2px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); flex-shrink: 0; display: block; }
+.flag-slot { display: inline-block; vertical-align: middle; margin-right: 8px; }
+.hud-id .flag { filter: drop-shadow(0 0 0 transparent); }
+button.ghost.off { opacity: 0.5; }
+
+/* Panel frames: brass corner brackets, like the margins of an old situation-room plate. */
+.card { position: relative; background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 40%); }
+.card::before, .card::after { content: ''; position: absolute; width: 9px; height: 9px; pointer-events: none; border: 0 solid var(--accent); opacity: 0.7; }
+.card::before { left: -1px; bottom: -1px; border-width: 0 0 2px 2px; border-bottom-left-radius: 3px; }
+.card::after { right: -1px; bottom: -1px; border-width: 0 2px 2px 0; border-bottom-right-radius: 3px; }
+.auth.card::before, .auth.card::after { width: 14px; height: 14px; }
+
+/* Subtle paper grain on the map backdrop. */
+.map-host { background-image: radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px); background-size: 6px 6px; }

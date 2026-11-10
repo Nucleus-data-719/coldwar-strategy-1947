@@ -83,6 +83,93 @@ interface Ctx {
 const hex = (c: string) => parseInt(c.replace('#', ''), 16);
 const centerOf = (key: string) => PROVINCE_BY_KEY[key].center;
 
+
+type UnitClass = 'infantry' | 'armor' | 'artillery' | 'air' | 'naval';
+const CLASS_OF: Record<string, UnitClass> = {
+  infantry: 'infantry', artillery: 'artillery', light_tank: 'armor', heavy_tank: 'armor',
+  fighter: 'air', bomber: 'air', air_support: 'air',
+  submarine: 'naval', destroyer: 'naval', cruiser: 'naval', battleship: 'naval',
+};
+
+/** The kind of unit that makes up most of a formation decides its map symbol. */
+function formationClass(units: { unitType: string; count: number }[]): UnitClass {
+  const totals: Record<UnitClass, number> = { infantry: 0, armor: 0, artillery: 0, air: 0, naval: 0 };
+  for (const u of units) totals[CLASS_OF[u.unitType] ?? 'infantry'] += u.count;
+  return (Object.keys(totals) as UnitClass[]).sort((a, b) => totals[b] - totals[a])[0];
+}
+
+/** A NATO-style army counter: dark plate, owner-colour band, unit symbol. Centre x,y; scaled by k. */
+function drawCounter(g: Graphics, x: number, y: number, k: number, owner: number, cls: UnitClass) {
+  const w = 34 * k;
+  const h = 20 * k;
+  g.roundRect(x - w / 2, y - h / 2, w, h, 3 * k).fill({ color: 0x101b27 }).stroke({ width: 1.6 * k, color: 0xffe27a });
+  g.rect(x - w / 2 + 1.5 * k, y - h / 2 + 1.5 * k, w - 3 * k, 3.5 * k).fill({ color: owner });
+  const sx = x - 9 * k;
+  const sy = y + 2 * k;
+  const line = { width: 1.4 * k, color: 0xffffff };
+  switch (cls) {
+    case 'infantry':
+      g.moveTo(sx - 6 * k, sy - 4 * k).lineTo(sx + 6 * k, sy + 4 * k).moveTo(sx + 6 * k, sy - 4 * k).lineTo(sx - 6 * k, sy + 4 * k).stroke(line);
+      break;
+    case 'armor':
+      g.ellipse(sx, sy, 6 * k, 3.6 * k).stroke(line);
+      break;
+    case 'artillery':
+      g.circle(sx, sy, 2.4 * k).fill({ color: 0xffffff });
+      break;
+    case 'air':
+      g.poly([sx, sy - 5 * k, sx + 7 * k, sy + 4 * k, sx, sy + 1.5 * k, sx - 7 * k, sy + 4 * k]).fill({ color: 0xffffff });
+      break;
+    case 'naval':
+      g.moveTo(sx, sy - 5 * k).lineTo(sx, sy + 3 * k).moveTo(sx - 4 * k, sy - 2 * k).lineTo(sx + 4 * k, sy - 2 * k).stroke(line);
+      g.moveTo(sx + 5 * k, sy + 1 * k).arc(sx, sy + 1 * k, 5 * k, 0, Math.PI).stroke(line);
+      break;
+  }
+}
+
+/** Small terrain marks on a province so the map reads as a map and not a colour chart. */
+function drawTerrainMarks(g: Graphics, polygon: number[], terrain: string, seed: number) {
+  const xs = polygon.filter((_, i) => i % 2 === 0);
+  const ys = polygon.filter((_, i) => i % 2 === 1);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const inside = (px: number, py: number) => {
+    let c = false;
+    for (let i = 0, j = polygon.length / 2 - 1; i < polygon.length / 2; j = i++) {
+      const xi = polygon[i * 2], yi = polygon[i * 2 + 1], xj = polygon[j * 2], yj = polygon[j * 2 + 1];
+      if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  let r = seed || 1;
+  const rnd = () => ((r = (r * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const count = Math.min(9, Math.max(3, Math.round(((maxX - minX) * (maxY - minY)) / 900)));
+  for (let n = 0, tries = 0; n < count && tries < 60; tries++) {
+    const px = minX + rnd() * (maxX - minX);
+    const py = minY + rnd() * (maxY - minY);
+    if (!inside(px, py) || !inside(px + 4, py) || !inside(px - 4, py) || !inside(px, py + 4)) continue;
+    n++;
+    switch (terrain) {
+      case 'mountains':
+        g.poly([px - 4, py + 3, px, py - 4, px + 4, py + 3]).fill({ color: 0x000000, alpha: 0.28 });
+        g.poly([px - 1, py - 1.4, px, py - 4, px + 1, py - 1.4]).fill({ color: 0xffffff, alpha: 0.5 });
+        break;
+      case 'forest':
+        g.circle(px, py, 2.6).fill({ color: 0x0b2412, alpha: 0.4 });
+        g.rect(px - 0.4, py + 2, 0.8, 1.8).fill({ color: 0x0b2412, alpha: 0.4 });
+        break;
+      case 'hills':
+        g.moveTo(px - 3.4, py + 2).arc(px, py + 2, 3.4, Math.PI, 0).stroke({ width: 1.1, color: 0x000000, alpha: 0.3 });
+        break;
+      case 'desert':
+        g.circle(px, py, 0.9).fill({ color: 0x7a5a10, alpha: 0.4 });
+        g.circle(px + 2.5, py + 1.5, 0.7).fill({ color: 0x7a5a10, alpha: 0.4 });
+        break;
+      default:
+        g.moveTo(px - 3, py).lineTo(px + 3, py).stroke({ width: 0.8, color: 0x1d3a10, alpha: 0.25 });
+    }
+  }
+}
+
 /** Interactive PixiJS map. Geometry comes from shared map data; ownership comes from the server. */
 export function WorldMap({
   provinces,
@@ -103,6 +190,8 @@ export function WorldMap({
   const formationsRef = useRef(formations);
   const offsetRef = useRef(clockOffsetMs);
   const previewRef = useRef(previewPath);
+  const colorsRef = useRef(new Map<string, number>());
+  colorsRef.current = new Map(countries.map((c) => [c.id, parseInt(c.color.replace('#', ''), 16)]));
   onSelectRef.current = onSelect;
   formationsRef.current = formations;
   offsetRef.current = clockOffsetMs;
@@ -267,24 +356,57 @@ export function WorldMap({
           }
 
           const seen = new Set<string>();
+          const sc = world.scale.x;
+          const k = Math.min(1.4, 0.9 / sc); // counters keep a readable size at every zoom
+          const colors = colorsRef.current;
+          const slots = new Map<string, number>();
           for (const f of formationsRef.current) {
             const m = f.movement;
-            if (!m) continue;
-            const a = centerOf(f.provinceKey);
-            const b = centerOf(m.toKey);
-            const start = Date.parse(m.startedAt);
-            const end = Date.parse(m.arrivesAt);
-            const t = end > start ? Math.min(1, Math.max(0, (now - start) / (end - start))) : 1;
-            const x = a.x + (b.x - a.x) * t;
-            const y = a.y + (b.y - a.y) * t;
-
-            routeG.moveTo(x, y).lineTo(b.x, b.y);
-            for (const key of m.remainingKeys) {
-              const c = centerOf(key);
-              routeG.lineTo(c.x, c.y);
+            let x: number;
+            let y: number;
+            if (m) {
+              const a = centerOf(f.provinceKey);
+              const b = centerOf(m.toKey);
+              const start = Date.parse(m.startedAt);
+              const end = Date.parse(m.arrivesAt);
+              const t = end > start ? Math.min(1, Math.max(0, (now - start) / (end - start))) : 1;
+              x = a.x + (b.x - a.x) * t;
+              y = a.y + (b.y - a.y) * t;
+              // Dashed look: the route ahead is drawn as short gold segments with an arrow head at the end.
+              const pts = [{ x, y }, b, ...m.remainingKeys.map(centerOf)];
+              for (let i = 0; i < pts.length - 1; i++) {
+                const p0 = pts[i];
+                const p1 = pts[i + 1];
+                const len = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+                const dash = 7 * k;
+                const gap = 5 * k;
+                for (let d = 0; d < len; d += dash + gap) {
+                  const e = Math.min(len, d + dash);
+                  routeG.moveTo(p0.x + ((p1.x - p0.x) * d) / len, p0.y + ((p1.y - p0.y) * d) / len);
+                  routeG.lineTo(p0.x + ((p1.x - p0.x) * e) / len, p0.y + ((p1.y - p0.y) * e) / len);
+                }
+              }
+              routeG.stroke({ width: 2 * k, color: 0xffe27a, alpha: 0.9 });
+              const last = pts[pts.length - 1];
+              const prev = pts[pts.length - 2];
+              const ang = Math.atan2(last.y - prev.y, last.x - prev.x);
+              const ah = 8 * k;
+              routeG
+                .poly([
+                  last.x, last.y,
+                  last.x - Math.cos(ang - 0.5) * ah, last.y - Math.sin(ang - 0.5) * ah,
+                  last.x - Math.cos(ang + 0.5) * ah, last.y - Math.sin(ang + 0.5) * ah,
+                ])
+                .fill({ color: 0xffe27a });
+            } else {
+              if (sc < 0.7) continue;
+              const c = centerOf(f.provinceKey);
+              const i = slots.get(f.provinceKey) ?? 0;
+              slots.set(f.provinceKey, i + 1);
+              x = c.x + i * 38 * k;
+              y = c.y + 24 * k;
             }
-            routeG.stroke({ width: 2, color: 0xffe27a, alpha: 0.85 });
-            routeG.roundRect(x - 15, y - 10, 30, 20, 5).fill({ color: 0x14202e }).stroke({ width: 2, color: 0xffe27a });
+            drawCounter(routeG, x, y, k, colors.get(f.countryId) ?? 0x888888, formationClass(f.units));
 
             let label = armyTexts.get(f.id);
             if (!label) {
@@ -298,7 +420,8 @@ export function WorldMap({
             }
             const total = String(f.units.reduce((s, u) => s + u.count, 0));
             if (label.text !== total) label.text = total;
-            label.position.set(x, y);
+            label.scale.set(k);
+            label.position.set(x + 9 * k, y);
             seen.add(f.id);
           }
           for (const [id, label] of armyTexts) {
@@ -420,6 +543,8 @@ export function WorldMap({
           width: selected ? 4 : mine ? 2 : enemy ? 2 : 1,
           color: selected ? 0xffffff : mine ? 0xffe27a : enemy ? 0xe5483f : 0x0b1d2e,
         });
+
+      if (mode !== 'resources') drawTerrainMarks(shape.g, geo.polygon, geo.terrain, geo.key.length * 7919 + geo.key.charCodeAt(0));
 
       const parts: string[] = [];
       if (capitalKeys.has(geo.key)) parts.push('★');

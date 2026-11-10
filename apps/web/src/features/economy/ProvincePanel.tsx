@@ -1,3 +1,4 @@
+import { BuildingIcon, UnitIcon } from '../../components/art';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -172,7 +173,7 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
           const left = (new Date(b.completesAt).getTime() - now) / 1000;
           return (
             <li key={b.type}>
-              <span>{BUILDINGS[b.type].name}</span>
+              <span className="with-icon"><BuildingIcon type={b.type} size={18} /> {BUILDINGS[b.type].name}</span>
               <span className="muted small">
                 {b.status === 'complete' ? 'Complete' : `Building… ${formatDuration(left)}`}
               </span>
@@ -189,7 +190,12 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
             <div>
               <div>{f.name}</div>
               <div className="muted small">
-                {f.units.map((u) => `${u.count} ${UNITS[u.unitType].name}`).join(', ') || 'empty'}
+                {f.units.length === 0 && 'empty'}
+                {f.units.map((u) => (
+                  <span key={u.unitType} className="unit-chip">
+                    <UnitIcon type={u.unitType} size={16} /> {u.count} {UNITS[u.unitType].name}
+                  </span>
+                ))}
               </div>
             </div>
             {f.countryId === state.me.countryId && f.units.length > 0 && (
@@ -206,6 +212,7 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
           {factoryUnits.length === 0 && <p className="warn small">Nothing to build here yet: research the units for the buildings in this province.</p>}
           {error && <p className="error small">{error}</p>}
           <div className="row">
+            <UnitIcon type={chosen} size={26} />
             <select value={chosen} onChange={(e) => setUnitType(e.target.value as UnitType)}>
               {factoryUnits.map((t) => (
                 <option key={t} value={t}>
@@ -282,7 +289,7 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
               return (
                 <li key={type}>
                   <div>
-                    <strong>{def.name}</strong>
+                    <strong className="with-icon"><BuildingIcon type={type} size={20} /> {def.name}</strong>
                     {!def.effectActive && <span className="chip soon">effect coming later</span>}
                     <div className="muted small">{def.description}</div>
                     <div className="muted small">

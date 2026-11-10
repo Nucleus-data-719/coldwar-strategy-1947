@@ -1,3 +1,4 @@
+import { Flag } from '../components/art';
 import { Crest } from '../components/Icon';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -110,7 +111,9 @@ export function LobbyPage({ user, onEnter, onLogout }: Props) {
                 .map((c) => (
                   <li key={c.id}>
                     <div>
-                      <span className="swatch" style={{ background: c.color }} />
+                      <span className="flag-slot">
+                        <Flag code={c.code} color={c.color} width={30} />
+                      </span>
                       <strong>{c.name}</strong>
                       <div className="muted small">
                         {c.blurb} · {c.provinceCount} provinces

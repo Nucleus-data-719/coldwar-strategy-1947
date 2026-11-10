@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { getSocket } from '../services/socket';
@@ -7,6 +7,10 @@ import { ResourceBar, useProjectedBalance } from '../features/economy/ResourceBa
 import { ProvincePanel } from '../features/economy/ProvincePanel';
 import { EconomyPanel } from '../features/economy/EconomyPanel';
 import { Crest, Icon, type IconName } from '../components/Icon';
+import { Flag } from '../components/art';
+import { SoundControls } from '../components/SoundControls';
+import { playSfx, sfxForNotification } from '../services/audio';
+import { verdict } from '../features/military/BattlesPanel';
 import { NotificationsPanel, useUnreadCount } from '../features/economy/NotificationsPanel';
 import { ArmiesPanel } from '../features/military/ArmiesPanel';
 import { MovePanel } from '../features/military/MovePanel';
@@ -50,6 +54,24 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
   const [drawerTab, setDrawerTab] = useState<DrawerTab>('province');
   const unread = useUnreadCount(campaignId);
 
+  // A new battle report plays a battle sound, followed by a victory or defeat sting for your own fights.
+  const battles = useQuery({ queryKey: ['battles', campaignId], queryFn: () => api.battles(campaignId) });
+  const lastBattle = useRef<string | null | undefined>(undefined);
+  const topBattle = battles.data?.[0];
+  useEffect(() => {
+    if (!battles.data) return;
+    const id = topBattle?.id ?? null;
+    if (lastBattle.current !== undefined && id && id !== lastBattle.current && topBattle) {
+      playSfx('battle');
+      const mine = state?.me.countryId;
+      if (mine && (topBattle.attacker.countryId === mine || topBattle.defender.countryId === mine)) {
+        window.setTimeout(() => playSfx(verdict(topBattle, mine) === 'Victory' ? 'victory' : 'defeat'), 700);
+      }
+    }
+    lastBattle.current = id;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topBattle?.id, battles.data]);
+
   // Move mode: pick an army, then click a destination on the map.
   const [moveFormationId, setMoveFormationId] = useState<string | null>(null);
   const [dest, setDest] = useState<string | null>(null);
@@ -76,7 +98,10 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
         qc.invalidateQueries({ queryKey: ['diplomacy', campaignId] });
       }, 200);
     };
-    const onNotification = () => qc.invalidateQueries({ queryKey: ['notifications', campaignId] });
+    const onNotification = (n?: { type?: string }) => {
+      qc.invalidateQueries({ queryKey: ['notifications', campaignId] });
+      playSfx(sfxForNotification(n?.type ?? ''));
+    };
     socket.on('campaign:update', refresh);
     socket.on('notification', onNotification);
     return () => {
@@ -123,6 +148,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
     }
     setSelected(key);
     if (key) {
+      playSfx('select');
       setDrawerOpen(true);
       setDrawerTab('province');
     }
@@ -153,7 +179,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
     <div className="game">
       <header className="hud">
         <div className="hud-id">
-          <Crest size={36} />
+          {myCountry ? <Flag code={myCountry.code} color={myCountry.color} width={42} /> : <Crest size={36} />}
           <div className="hud-title">
             <strong>{myCountry?.name ?? 'Cold War 1947'}</strong>
             <span>{state.campaign.name}</span>
@@ -184,6 +210,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
             <Icon name="bell" />
             {unread > 0 && <span className="badge bell-count">{unread > 99 ? '99+' : unread}</span>}
           </button>
+          <SoundControls />
           <FeedbackButton
             campaignId={campaignId}
             details={{ tab, selected, mapMode, country: myCountry?.code, stateAt: state.serverTime }}

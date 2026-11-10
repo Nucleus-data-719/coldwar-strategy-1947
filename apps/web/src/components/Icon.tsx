@@ -56,6 +56,25 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M4 17l3 3M20 17l-3 3M3 21l3-3M21 21l-3-3" />
     </>
   ),
+  sound: (
+    <>
+      <path d="M4 9h4l5-4v14l-5-4H4z" />
+      <path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" />
+    </>
+  ),
+  soundOff: (
+    <>
+      <path d="M4 9h4l5-4v14l-5-4H4z" />
+      <path d="M17 9l5 6M22 9l-5 6" />
+    </>
+  ),
+  music: (
+    <>
+      <path d="M9 18V5l11-2v13" />
+      <circle cx="6.5" cy="18" r="2.5" />
+      <circle cx="17.5" cy="16" r="2.5" />
+    </>
+  ),
   star: <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" />,
 };
 

@@ -198,3 +198,19 @@ Done when: you capture an AI province, its income moves to you (after the occupa
 * Login and lobby were restyled with the same crest and components.
 * **Local Factory fix** (from Week 8 feedback): Local Factory and Industry research boost only money, oil, steel, electronics and rare materials, never food or manpower.
 * No database changes this week.
+
+## Week 10 - Art and sound
+
+**Art** (`apps/web/src/components/art.tsx`, drawn as SVG, no image files):
+* 11 unit silhouettes (infantry with rifle, artillery, light/heavy tank, fighter, bomber, air support, submarine, destroyer, cruiser, battleship) and 9 building icons, used in the Province and Armies panels.
+* Flags: the 1947 flags of the 12 playable countries (USSR, USA, UK, France, China (ROC), India, Turkey, Brazil, Poland, Egypt, Sweden, Japan). AI-run regional blocs (Iberia, Maghreb, etc.) are not single historic states, so they get emblem banners in their bloc colour. Flags show in the top bar and the country picker.
+* Map: terrain marks on provinces (mountain peaks, trees, hill arcs, desert dots, plains grass), and NATO-style army counters. Stationary armies are now visible on the map (previously only marching ones were), with a symbol for the main unit type, the owner colour band and the unit count. Marching armies show a dashed route with an arrow head.
+* Panels have brass corner brackets and the map has a faint grain.
+
+**Sound** (`apps/web/src/services/audio.ts`): all sounds are synthesized in the browser with the Web Audio API, so there are no audio files, nothing to license and nothing to download.
+* Effects: button click, confirm (primary buttons), warning (danger buttons), province select, build, recruit, research complete, battle, victory, defeat, alert, war declared. Server notifications and new battle reports pick their sound automatically.
+* Music: a slow generated theme in D minor (drone, pad, march taps, sparse lead). It is off by default; use the music button in the top bar. Both toggles are remembered in the browser.
+* Browsers only allow sound after the first click, so nothing plays before that.
+* To use recorded music or effects later, drop files in `apps/web/public/audio/` and replace the matching recipe in `audio.ts`.
+
+No database changes this week.

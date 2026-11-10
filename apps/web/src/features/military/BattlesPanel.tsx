@@ -50,7 +50,7 @@ function Report({ r }: { r: BattleReportDto }) {
   );
 }
 
-const verdict = (r: BattleReportDto, myId: string) => {
+export const verdict = (r: BattleReportDto, myId: string) => {
   const attackerWon = r.outcome !== 'defender_held';
   const iAttacked = r.attacker.countryId === myId;
   return attackerWon === iAttacked ? 'Victory' : 'Defeat';

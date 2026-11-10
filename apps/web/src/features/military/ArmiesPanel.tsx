@@ -1,3 +1,4 @@
+import { UnitIcon } from '../../components/art';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { GENERAL_BY_ID, PROVINCE_BY_KEY, UNITS, formatDuration, type FormationDto, type UnitType } from '@cw/shared';
@@ -50,7 +51,11 @@ export function ArmiesPanel({ campaignId, formations, activeId, onMove, onFocus 
       <ul className="list compact">
         {armies.map((f) => {
           const m = f.movement;
-          const summary = f.units.map((u) => `${u.count} ${UNITS[u.unitType].name}`).join(', ');
+          const summary = f.units.map((u) => (
+            <span key={u.unitType} className="unit-chip">
+              <UnitIcon type={u.unitType} size={16} /> {u.count} {UNITS[u.unitType].name}
+            </span>
+          ));
           const finalKey = m ? (m.remainingKeys.at(-1) ?? m.toKey) : null;
           const nextIn = m ? (Date.parse(m.arrivesAt) - now) / 1000 : 0;
           return (
