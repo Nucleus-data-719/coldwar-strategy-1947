@@ -13,7 +13,7 @@ import { BattlesPanel } from '../features/military/BattlesPanel';
 import { FeedbackButton } from '../features/feedback/FeedbackButton';
 import { ResearchPanel } from '../features/research/ResearchPanel';
 import { GeneralsPanel } from '../features/generals/GeneralsPanel';
-import { WarsPanel } from '../features/diplomacy/WarsPanel';
+import { DiplomacyPanel } from '../features/diplomacy/DiplomacyPanel';
 
 type Tab = 'world' | 'research' | 'economy' | 'generals' | 'diplomacy';
 const TABS: { id: Tab; label: string }[] = [
@@ -61,6 +61,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
         qc.invalidateQueries({ queryKey: ['battles', campaignId] });
         qc.invalidateQueries({ queryKey: ['wars', campaignId] });
         qc.invalidateQueries({ queryKey: ['generals', campaignId] });
+        qc.invalidateQueries({ queryKey: ['diplomacy', campaignId] });
       }, 200);
     };
     const onNotification = () => qc.invalidateQueries({ queryKey: ['notifications', campaignId] });
@@ -244,7 +245,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
 
         {tab === 'research' && <ResearchPanel campaignId={campaignId} state={state} balance={balance} />}
         {tab === 'generals' && <GeneralsPanel campaignId={campaignId} state={state} />}
-        {tab === 'diplomacy' && <WarsPanel campaignId={campaignId} state={state} />}
+        {tab === 'diplomacy' && <DiplomacyPanel campaignId={campaignId} state={state} />}
       </div>
     </div>
   );

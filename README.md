@@ -71,6 +71,16 @@ Done when: you build a mixed army of infantry, artillery and tanks and run short
 - Timers scale with `GAME_SPEED` like everything else.
 - **Before you start:** run `docs/week6.sql` in the Neon SQL editor, then restart.
 
+## Week 7: diplomacy and alliances
+
+- The **Diplomacy** tab now lists every country with a relationship stage (hostile, unfriendly, neutral, friendly, allied, at war) built from an opinion score of -100 to 100, plus the war list.
+- **Alliances:** up to 3. An AI country accepts when its opinion of you is 25 or more; a player gets a request to accept or decline in the same tab. You cannot declare war on an ally; break the alliance first (costs -30 opinion).
+- **Foreign aid:** send money, food, oil, steel, electronics or rare materials to any country you are not at war with. Every 150 worth is +1 opinion (max +10 per gift), so gifts are how you win an AI over. Gifts never buy research or units.
+- **Mutual defence:** when a country is attacked, each of its allies gets a call to war with a **2 hour** countdown (scaled by `GAME_SPEED`). They can **Join now**, **Decline** (the alliance ends, -40 opinion) or do nothing and join automatically when the timer ends, even if offline. A call is voided if the alliance, the war or the situation changed. When an ally joins, the aggressor's own allies get called in turn.
+- **AI diplomacy (basic):** AI countries accept or refuse alliance offers and honour defence calls. They do not propose alliances or declare wars on their own yet; AI warfare arrives in Week 8.
+- **Not in yet:** peace treaties. A war still lasts until the campaign ends.
+- **Before you start:** run `docs/week7.sql` in the Neon SQL editor, then restart.
+
 ## Not built yet (next slices)
 
 Combat and province capture · research · generals · monthly missions and leaderboard · diplomacy and alliances · capital relocation · payments. The Research / Generals / Diplomacy tabs are placeholders.

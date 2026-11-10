@@ -1,4 +1,5 @@
 import type { BattleModifier, BattleRoundLog } from './combat';
+import type { RelationStage } from './game-data/diplomacy';
 import type {
   BuildingStatus,
   BuildingType,
@@ -188,6 +189,39 @@ export interface GeneralsStateDto {
   slots: number;
   /** When the next free fragment can be claimed; null means now. */
   nextDispatchAt: string | null;
+}
+
+export type AllianceState = 'none' | 'proposed_by_you' | 'proposed_to_you' | 'active';
+
+export interface DiplomacyCountryDto {
+  countryId: string;
+  name: string;
+  color: string;
+  aiControlled: boolean;
+  /** -100 to 100, how this country feels about you (the same number both ways). */
+  opinion: number;
+  stage: RelationStage;
+  alliance: AllianceState;
+  atWar: boolean;
+}
+
+/** An ally asks for help because a country it is allied with was attacked. */
+export interface WarCallDto {
+  id: string;
+  /** The attacked ally. */
+  defenderId: string;
+  defenderName: string;
+  aggressorId: string;
+  aggressorName: string;
+  /** You join the war automatically at this time unless you decline. */
+  joinsAt: string;
+}
+
+export interface DiplomacyStateDto {
+  countries: DiplomacyCountryDto[];
+  calls: WarCallDto[];
+  allianceCount: number;
+  maxAlliances: number;
 }
 
 export interface WarDto {

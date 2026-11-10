@@ -2,7 +2,8 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { and, eq, isNull, or } from 'drizzle-orm';
 import type { WarDto } from '@cw/shared';
 import { DB, Db, DbOrTx } from '../db/db.module';
-import { countries, wars } from '../db/schema';
+import { alliances, countries, wars } from '../db/schema';
+import { allianceBetween, onWarDeclared } from '../diplomacy/diplomacy.queries';
 import { EconomyService } from '../economy/economy.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PlayersService } from '../players/players.service';
@@ -61,22 +62,42 @@ export class WarsService {
     const player = await this.players.require(userId, campaignId);
     if (targetCountryId === player.countryId) throw new BadRequestException('You cannot declare war on yourself');
 
-    const note = await this.economy.lockMany([player.countryId, targetCountryId], async (tx, rows) => {
+    const notes = await this.economy.lockMany([player.countryId, targetCountryId], async (tx, rows) => {
       const me = rows.get(player.countryId)!;
       const target = rows.get(targetCountryId)!;
       if (target.campaignId !== campaignId) throw new NotFoundException('Country not found in this campaign');
       if ((await this.enemiesOf(tx, me.id)).has(target.id)) {
         throw new BadRequestException(`You are already at war with ${target.name}`);
       }
+      const pact = await allianceBetween(tx, me.id, target.id);
+      if (pact?.status === 'active') {
+        throw new BadRequestException(`You are allied with ${target.name}. Break the alliance first.`);
+      }
       await tx.insert(wars).values({ campaignId, aggressorId: me.id, defenderId: target.id });
-      return this.notifications.add(tx, {
-        campaignId,
-        countryId: target.id,
-        type: 'war_declared',
-        message: `${me.name} has declared war on you!`,
-      });
+      if (pact) await tx.delete(alliances).where(eq(alliances.id, pact.id)); // a pending proposal lapses
+      const calls = await onWarDeclared(tx, campaignId, me.id, target.id);
+
+      const out = [
+        await this.notifications.add(tx, {
+          campaignId,
+          countryId: target.id,
+          type: 'war_declared',
+          message: `${me.name} has declared war on you!`,
+        }),
+      ];
+      for (const c of calls) {
+        out.push(
+          await this.notifications.add(tx, {
+            campaignId,
+            countryId: c.allyId,
+            type: 'war_call',
+            message: `${target.name}, your ally, was attacked by ${me.name}. You will join the war automatically unless you decline. Open Diplomacy.`,
+          }),
+        );
+      }
+      return out;
     });
-    this.notifications.publish(note);
+    for (const n of notes) this.notifications.publish(n);
     this.realtime.campaignUpdate(campaignId, { kind: 'war' });
     return { ok: true };
   }

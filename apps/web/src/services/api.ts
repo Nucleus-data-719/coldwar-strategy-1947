@@ -1,4 +1,6 @@
 import type {
+  DiplomacyStateDto,
+  PartialResources,
   GeneralsStateDto,
   BattleReportDto,
   WarDto,
@@ -107,6 +109,18 @@ export const api = {
     post<{ ok: true }>(`/campaigns/${campaignId}/generals/${generalId}/undeploy`),
   activateGeneral: (campaignId: string, generalId: string) =>
     post<{ ok: true; activeUntil: string }>(`/campaigns/${campaignId}/generals/${generalId}/activate`),
+
+  diplomacy: (campaignId: string) => request<DiplomacyStateDto>(`/campaigns/${campaignId}/diplomacy`),
+  proposeAlliance: (campaignId: string, countryId: string) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/diplomacy/alliance`, { countryId }),
+  respondAlliance: (campaignId: string, countryId: string, accept: boolean) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/diplomacy/alliance/respond`, { countryId, accept }),
+  breakAlliance: (campaignId: string, countryId: string) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/diplomacy/alliance/break`, { countryId }),
+  joinCall: (campaignId: string, callId: string) => post<{ ok: true }>(`/campaigns/${campaignId}/diplomacy/calls/${callId}/join`),
+  declineCall: (campaignId: string, callId: string) => post<{ ok: true }>(`/campaigns/${campaignId}/diplomacy/calls/${callId}/decline`),
+  sendAid: (campaignId: string, countryId: string, gift: PartialResources) =>
+    post<{ ok: true; opinionGain: number }>(`/campaigns/${campaignId}/diplomacy/assist`, { countryId, gift }),
 
   feedback: (message: string, campaignId?: string, context?: Record<string, unknown>) =>
     post<{ ok: true }>('/feedback', { message, campaignId, context }),

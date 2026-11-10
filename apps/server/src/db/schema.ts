@@ -327,6 +327,72 @@ export const wars = pgTable(
   ],
 );
 
+/** How two countries feel about each other. One row per pair, ids stored in sorted order. */
+export const relations = pgTable(
+  'relations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    countryA: uuid('country_a')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    countryB: uuid('country_b')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    opinion: integer('opinion').notNull().default(0),
+  },
+  (t) => [uniqueIndex('relations_pair_idx').on(t.countryA, t.countryB)],
+);
+
+export const alliances = pgTable(
+  'alliances',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    countryA: uuid('country_a')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    countryB: uuid('country_b')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    proposedBy: uuid('proposed_by').notNull(),
+    status: text('status').$type<'pending' | 'active'>().notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('alliances_pair_idx').on(t.countryA, t.countryB)],
+);
+
+/** A defence call: an ally of the attacked country is asked to join the war. */
+export const warCalls = pgTable(
+  'war_calls',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    allyId: uuid('ally_id')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    defenderId: uuid('defender_id')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    aggressorId: uuid('aggressor_id')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    status: text('status').$type<'pending' | 'joined' | 'declined' | 'void'>().notNull().default('pending'),
+    joinsAt: ts('joins_at').notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('war_calls_ally_target_idx').on(t.allyId, t.defenderId, t.aggressorId),
+    index('war_calls_due_idx').on(t.status, t.joinsAt),
+  ],
+);
+
 export const battleReports = pgTable(
   'battle_reports',
   {
@@ -364,3 +430,5 @@ export type BattleReportRow = typeof battleReports.$inferSelect;
 export type ProductionOrderRow = typeof productionOrders.$inferSelect;
 export type ResearchRow = typeof research.$inferSelect;
 export type GeneralRow = typeof generals.$inferSelect;
+export type AllianceRow = typeof alliances.$inferSelect;
+export type WarCallRow = typeof warCalls.$inferSelect;
