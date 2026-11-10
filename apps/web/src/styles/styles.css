@@ -127,3 +127,10 @@ ul.plain { margin: 0 0 8px; padding-left: 18px; }
 .rounds { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .round .att { color: #ffe27a; }
 .round .def { color: #7fb4ff; }
+
+/* Week 3 */
+.resource.short { outline: 1px solid #e5483f; background: #3a1816; }
+.resource.short strong { color: #ff8a80; }
+.list li:has(> .manage) { flex-wrap: wrap; }
+.manage { flex-basis: 100%; margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+.manage h3 { margin: 4px 0 0; }

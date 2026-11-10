@@ -5,9 +5,11 @@ import {
   applyRates,
   emptyResources,
   provinceProduction,
+  shortagesOf,
   subtractResources,
   unitUpkeepPerHour,
   type BuildingLike,
+  type ResourceKey,
   type Resources,
 } from '@cw/shared';
 import { env } from '../config/env';
@@ -73,12 +75,13 @@ export class EconomyService {
   }
 
   /** Current balance and rates without writing anything. */
-  async getLive(countryId: string): Promise<{ balance: Resources; rates: Resources }> {
+  async getLive(countryId: string): Promise<{ balance: Resources; rates: Resources; shortages: ResourceKey[] }> {
     const [country] = await this.db.select().from(countries).where(eq(countries.id, countryId));
     if (!country) throw new NotFoundException('Country not found');
     const rates = await this.computeRates(this.db, countryId);
     const elapsed = ((Date.now() - country.resourcesUpdatedAt.getTime()) / 1000) * env.GAME_SPEED;
-    return { balance: applyRates(rowToResources(country), rates, elapsed), rates };
+    const balance = applyRates(rowToResources(country), rates, elapsed);
+    return { balance, rates, shortages: shortagesOf(balance, rates) };
   }
 
   /** Brings the stored balance up to date. Call inside `lock`, before anything changes the rates. */

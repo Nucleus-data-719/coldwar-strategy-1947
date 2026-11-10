@@ -69,7 +69,7 @@ export class MovementService {
   }
 
   /** Splits the chosen units off into a new formation in the same province. Returns the formation to move. */
-  private async split(
+  async split(
     tx: DbOrTx,
     formation: FormationRow,
     units: FormationUnitRow[],

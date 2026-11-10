@@ -139,6 +139,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
       <ResourceBar
         balance={state.resources.balance}
         rates={state.resources.rates}
+        shortages={state.resources.shortages}
         receivedAt={dataUpdatedAt || Date.now()}
         gameSpeed={state.campaign.gameSpeed}
       />

@@ -14,6 +14,10 @@ export interface UnitDef {
   upkeep: PartialResources;
   /** Can be recruited in the current build. */
   recruitable: boolean;
+  /** Military factories can produce it. */
+  factoryProducible: boolean;
+  /** Base seconds a factory needs for one unit (divided by GAME_SPEED). */
+  buildSeconds: number;
 }
 
 export const UNITS: Record<UnitType, UnitDef> = {
@@ -28,6 +32,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 60, food: 20, manpower: 100 },
     upkeep: { food: 1, money: 0.5 },
     recruitable: true,
+    factoryProducible: false,
+    buildSeconds: 0,
   },
   artillery: {
     type: 'artillery',
@@ -40,6 +46,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 150, steel: 40, manpower: 60 },
     upkeep: { food: 1, money: 1, steel: 0.2 },
     recruitable: false,
+    factoryProducible: true,
+    buildSeconds: 1800,
   },
   light_tank: {
     type: 'light_tank',
@@ -52,6 +60,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 220, steel: 80, oil: 20, manpower: 40 },
     upkeep: { money: 1.5, oil: 0.6 },
     recruitable: false,
+    factoryProducible: true,
+    buildSeconds: 3600,
   },
   heavy_tank: {
     type: 'heavy_tank',
@@ -64,6 +74,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 450, steel: 180, oil: 50, manpower: 50 },
     upkeep: { money: 2.5, oil: 1.4 },
     recruitable: false,
+    factoryProducible: true,
+    buildSeconds: 7200,
   },
   fighter: {
     type: 'fighter',
@@ -76,6 +88,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 300, steel: 60, oil: 30, electronics: 5, manpower: 20 },
     upkeep: { money: 2, oil: 1 },
     recruitable: false,
+    factoryProducible: false,
+    buildSeconds: 0,
   },
   bomber: {
     type: 'bomber',
@@ -88,6 +102,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 450, steel: 90, oil: 60, electronics: 8, manpower: 30 },
     upkeep: { money: 3, oil: 1.6 },
     recruitable: false,
+    factoryProducible: false,
+    buildSeconds: 0,
   },
   air_support: {
     type: 'air_support',
@@ -100,6 +116,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 350, steel: 70, oil: 40, electronics: 6, manpower: 20 },
     upkeep: { money: 2.2, oil: 1.2 },
     recruitable: false,
+    factoryProducible: false,
+    buildSeconds: 0,
   },
   submarine: {
     type: 'submarine',
@@ -112,6 +130,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 400, steel: 150, oil: 40, manpower: 40 },
     upkeep: { money: 2, oil: 0.8 },
     recruitable: false,
+    factoryProducible: false,
+    buildSeconds: 0,
   },
   destroyer: {
     type: 'destroyer',
@@ -124,6 +144,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 380, steel: 160, oil: 45, manpower: 60 },
     upkeep: { money: 2, oil: 0.9 },
     recruitable: false,
+    factoryProducible: false,
+    buildSeconds: 0,
   },
   cruiser: {
     type: 'cruiser',
@@ -136,6 +158,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 700, steel: 300, oil: 80, manpower: 100 },
     upkeep: { money: 3.5, oil: 1.6 },
     recruitable: false,
+    factoryProducible: false,
+    buildSeconds: 0,
   },
   battleship: {
     type: 'battleship',
@@ -148,5 +172,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 1400, steel: 650, oil: 160, manpower: 200 },
     upkeep: { money: 6, oil: 3 },
     recruitable: false,
+    factoryProducible: false,
+    buildSeconds: 0,
   },
 };

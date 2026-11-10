@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { PROVINCE_BY_KEY, UNITS, formatDuration, type FormationDto } from '@cw/shared';
+import { PROVINCE_BY_KEY, UNITS, formatDuration, type FormationDto, type UnitType } from '@cw/shared';
 import { api } from '../../services/api';
 import { useNow } from '../../hooks/useNow';
 
@@ -17,6 +18,27 @@ export function ArmiesPanel({ campaignId, formations, activeId, onMove, onFocus 
   const stop = useMutation({
     mutationFn: (id: string) => api.stopFormation(campaignId, id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['state', campaignId] }),
+  });
+
+  const [manageId, setManageId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [splitCounts, setSplitCounts] = useState<Record<string, number>>({});
+  const done = () => {
+    setError(null);
+    setManageId(null);
+    setSplitCounts({});
+    qc.invalidateQueries({ queryKey: ['state', campaignId] });
+    qc.invalidateQueries({ queryKey: ['province', campaignId] });
+  };
+  const merge = useMutation({
+    mutationFn: (v: { id: string; intoId: string }) => api.mergeFormation(campaignId, v.id, v.intoId),
+    onSuccess: done,
+    onError: (e) => setError((e as Error).message),
+  });
+  const split = useMutation({
+    mutationFn: (v: { id: string; units: Partial<Record<UnitType, number>> }) => api.splitFormation(campaignId, v.id, v.units),
+    onSuccess: done,
+    onError: (e) => setError((e as Error).message),
   });
 
   const armies = formations.filter((f) => f.units.some((u) => u.count > 0));
@@ -46,12 +68,61 @@ export function ArmiesPanel({ campaignId, formations, activeId, onMove, onFocus 
               </div>
               <div className="row">
                 <button onClick={() => onMove(f.id)}>{m ? 'Redirect' : 'Move'}</button>
+                {!m && (
+                  <button onClick={() => { setError(null); setSplitCounts({}); setManageId(manageId === f.id ? null : f.id); }}>
+                    Manage
+                  </button>
+                )}
                 {m && m.remainingKeys.length > 0 && (
                   <button disabled={stop.isPending} onClick={() => stop.mutate(f.id)}>
                     Stop
                   </button>
                 )}
               </div>
+              {manageId === f.id && !m && (
+                <div className="manage">
+                  {error && <p className="error small">{error}</p>}
+                  <h3>Merge into</h3>
+                  {armies.filter((o) => o.id !== f.id && !o.movement && o.provinceKey === f.provinceKey).length === 0 ? (
+                    <p className="muted small">No other army in this province.</p>
+                  ) : (
+                    armies
+                      .filter((o) => o.id !== f.id && !o.movement && o.provinceKey === f.provinceKey)
+                      .map((o) => (
+                        <button key={o.id} disabled={merge.isPending} onClick={() => merge.mutate({ id: f.id, intoId: o.id })}>
+                          {o.name}
+                        </button>
+                      ))
+                  )}
+                  <h3>Split off a task force</h3>
+                  {f.units.map((u) => (
+                    <div key={u.unitType} className="row between small">
+                      <span>
+                        {UNITS[u.unitType].name} <span className="muted">(of {u.count})</span>
+                      </span>
+                      <input
+                        className="unit-input"
+                        type="number"
+                        min={0}
+                        max={u.count}
+                        value={splitCounts[u.unitType] ?? 0}
+                        onChange={(e) => setSplitCounts({ ...splitCounts, [u.unitType]: Number(e.target.value) })}
+                      />
+                    </div>
+                  ))}
+                  <button
+                    disabled={split.isPending || !Object.values(splitCounts).some((n: number) => n > 0)}
+                    onClick={() =>
+                      split.mutate({
+                        id: f.id,
+                        units: Object.fromEntries(Object.entries(splitCounts).filter(([, n]: [string, number]) => n > 0)) as Partial<Record<UnitType, number>>,
+                      })
+                    }
+                  >
+                    Split
+                  </button>
+                </div>
+              )}
             </li>
           );
         })}

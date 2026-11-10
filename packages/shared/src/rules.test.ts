@@ -7,6 +7,8 @@ import {
   scaleSeconds,
   unitUpkeepPerHour,
   PROVINCES,
+  shortagesOf,
+  supplyPenalty,
   COUNTRIES,
 } from './index';
 
@@ -56,5 +58,14 @@ describe('map data', () => {
     for (const p of PROVINCES) {
       for (const a of p.adjacent) expect(byKey.get(a)!.adjacent).toContain(p.key);
     }
+  });
+});
+
+describe('supply', () => {
+  it('shortage needs an empty stockpile and a negative rate', () => {
+    const balance = { ...emptyResources(), oil: 0, food: 0 };
+    const rates = { ...emptyResources(), oil: -1, food: 2 };
+    expect(shortagesOf(balance, rates).join(',')).toBe('oil');
+    expect(supplyPenalty(['oil'])[0].percent).toBe(-20);
   });
 });

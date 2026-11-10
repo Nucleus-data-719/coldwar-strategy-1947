@@ -1,13 +1,15 @@
 import { BUILDINGS } from './game-data/buildings';
+import { SUPPLY_PENALTY_PERCENT } from './game-data/constants';
 import { UNITS } from './game-data/units';
 import type {
   BuildingStatus,
   BuildingType,
   PartialResources,
+  ResourceKey,
   Resources,
   UnitType,
 } from './types';
-import { RESOURCE_KEYS, emptyResources } from './types';
+import { RESOURCE_KEYS, RESOURCE_LABELS, emptyResources } from './types';
 
 export interface BuildingLike {
   type: BuildingType;
@@ -81,4 +83,16 @@ export function formatDuration(totalSeconds: number): string {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${sec}s`;
   return `${sec}s`;
+}
+
+/** Resources that are at zero and still being used up: the country is short of them. */
+export function shortagesOf(balance: Resources, ratesPerHour: Resources): ResourceKey[] {
+  return RESOURCE_KEYS.filter((k) => balance[k] < 0.5 && ratesPerHour[k] < 0);
+}
+
+/** Battle penalties for the given shortages, as modifiers with negative percent. */
+export function supplyPenalty(shortages: ResourceKey[]): { label: string; percent: number }[] {
+  return shortages
+    .filter((k) => SUPPLY_PENALTY_PERCENT[k])
+    .map((k) => ({ label: `Out of ${RESOURCE_LABELS[k].toLowerCase()}`, percent: -(SUPPLY_PENALTY_PERCENT[k] ?? 0) }));
 }

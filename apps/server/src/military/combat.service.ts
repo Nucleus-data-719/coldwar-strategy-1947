@@ -4,9 +4,12 @@ import {
   CAPITAL_LOOT_SHARE,
   CAPITAL_STABILITY_LOSS,
   OCCUPATION_DISRUPTION_SECONDS,
+  CAPITAL_DEFENSE,
   explainBattle,
   hashSeed,
   resolveBattle,
+  shortagesOf,
+  supplyPenalty,
   type BattleReportDto,
   type BattleSideReport,
   type CombatUnit,
@@ -102,6 +105,10 @@ export class CombatService {
       .from(buildings)
       .where(and(eq(buildings.provinceId, province.id), eq(buildings.type, 'fortress'), eq(buildings.status, 'complete')));
 
+    // Out of oil, food or money while still using it up costs a side attack and defence.
+    const supplyMods = async (c: CountryRow, balance: Resources, side: 'attacker' | 'defender') =>
+      supplyPenalty(shortagesOf(balance, await this.economy.computeRates(tx, c.id))).map((m) => ({ side, ...m }));
+
     const attackerBefore = tally(a.units);
     const defenderBefore = tally(defUnitRows);
     const walkover = defenderBefore.length === 0;
@@ -112,6 +119,8 @@ export class CombatService {
       terrain: province.terrain,
       fortress: !!fort,
       provinceDefense: province.defense,
+      attackerModifiers: await supplyMods(attacker, attackerBalance, 'attacker'),
+      defenderModifiers: await supplyMods(defender, defenderBalance, 'defender'),
     });
     const won = result.outcome === 'attacker_won';
 
@@ -174,6 +183,7 @@ export class CombatService {
           .where(and(eq(provinces.ownerCountryId, defender.id), ne(provinces.id, province.id)))
           .orderBy(provinces.key)
           .limit(1);
+        if (next) await tx.update(provinces).set({ defense: CAPITAL_DEFENSE }).where(eq(provinces.id, next.id));
         await tx
           .update(countries)
           .set({ capitalProvinceId: next?.id ?? null, stability: Math.max(0, defender.stability - CAPITAL_STABILITY_LOSS) })

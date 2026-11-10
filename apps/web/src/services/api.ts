@@ -82,6 +82,17 @@ export const api = {
   stopFormation: (campaignId: string, formationId: string) =>
     post<{ ok: true }>(`/campaigns/${campaignId}/formations/${formationId}/stop`),
 
+  produce: (campaignId: string, provinceId: string, unitType: UnitType, quantity: number) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/provinces/${provinceId}/production`, { unitType, quantity }),
+  cancelProduction: (campaignId: string, orderId: string) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/production/${orderId}/cancel`),
+  mergeFormation: (campaignId: string, formationId: string, intoId: string) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/formations/${formationId}/merge`, { intoId }),
+  splitFormation: (campaignId: string, formationId: string, units: Partial<Record<UnitType, number>>) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/formations/${formationId}/split`, { units }),
+  moveCapital: (campaignId: string, provinceId: string) =>
+    post<{ ok: true; completesAt: string }>(`/campaigns/${campaignId}/capital`, { provinceId }),
+
   wars: (campaignId: string) => request<WarDto[]>(`/campaigns/${campaignId}/wars`),
   declareWar: (campaignId: string, countryId: string) =>
     post<{ ok: true }>(`/campaigns/${campaignId}/wars`, { countryId }),

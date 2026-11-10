@@ -2,6 +2,7 @@ import type { BattleModifier, BattleRoundLog } from './combat';
 import type {
   BuildingStatus,
   BuildingType,
+  ResourceKey,
   Resources,
   Terrain,
   UnitType,
@@ -97,7 +98,9 @@ export interface GameState {
   formations: FormationDto[];
   /** Ids of the countries you are at war with. */
   atWarWith: string[];
-  resources: { balance: Resources; rates: Resources };
+  resources: { balance: Resources; rates: Resources; shortages: ResourceKey[] };
+  /** A capital move in progress, if any. */
+  capitalMove: { provinceKey: string; completesAt: string } | null;
   serverTime: string;
 }
 
@@ -137,6 +140,16 @@ export interface ProvinceDetail {
   formations: FormationDto[];
   /** Set while a captured province produces nothing. */
   disruptedUntil: string | null;
+  /** Units waiting in this province's military factory (yours only). */
+  productionQueue: ProductionOrderDto[];
+}
+
+export interface ProductionOrderDto {
+  id: string;
+  unitType: UnitType;
+  /** 'building' is the unit in production; the rest are waiting. */
+  status: 'building' | 'queued';
+  completesAt: string | null;
 }
 
 export interface WarDto {

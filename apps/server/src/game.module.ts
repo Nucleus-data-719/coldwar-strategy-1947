@@ -5,6 +5,9 @@ import { BuildingsService } from './buildings/buildings.service';
 import { CampaignsController } from './campaigns/campaigns.controller';
 import { CampaignsService } from './campaigns/campaigns.service';
 import { EconomyService } from './economy/economy.service';
+import { CapitalService } from './capital/capital.service';
+import { FormationsService } from './military/formations.service';
+import { ProductionService } from './production/production.service';
 import { CombatService } from './military/combat.service';
 import { MovementService } from './military/movement.service';
 import { NotificationsService } from './notifications/notifications.service';
@@ -22,7 +25,10 @@ import { WarsService } from './wars/wars.service';
     BuildingsService,
     WarsService,
     CombatService,
+    ProductionService,
+    CapitalService,
     MovementService,
+    FormationsService,
     CampaignsService,
     AiService,
     SchedulerService,

@@ -3,8 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BUILDINGS,
   BUILDING_TYPES,
+  CAPITAL_MOVE_COST,
+  CAPITAL_MOVE_SECONDS,
+  MAX_ORDER_QUANTITY,
+  UNIT_TYPES,
   RESOURCE_KEYS,
   RESOURCE_LABELS,
+  PROVINCE_BY_KEY,
   UNITS,
   canAfford,
   formatDuration,
@@ -13,6 +18,7 @@ import {
   type GameState,
   type PartialResources,
   type Resources,
+  type UnitType,
 } from '@cw/shared';
 import { api } from '../../services/api';
 import { useNow } from '../../hooks/useNow';
@@ -35,6 +41,8 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
   const qc = useQueryClient();
   const now = useNow(1000);
   const [error, setError] = useState<string | null>(null);
+  const [unitType, setUnitType] = useState<UnitType>('artillery');
+  const [quantity, setQuantity] = useState(1);
 
   const stateProvince = state.provinces.find((p) => p.key === provinceKey);
   const provinceId = stateProvince?.id;
@@ -65,6 +73,27 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
     onError: (e) => setError((e as Error).message),
   });
 
+  const refresh = () => {
+    setError(null);
+    qc.invalidateQueries({ queryKey: ['state', campaignId] });
+    qc.invalidateQueries({ queryKey: ['province', campaignId] });
+  };
+  const produce = useMutation({
+    mutationFn: () => api.produce(campaignId, provinceId!, unitType, quantity),
+    onSuccess: refresh,
+    onError: (e) => setError((e as Error).message),
+  });
+  const cancelOrder = useMutation({
+    mutationFn: (id: string) => api.cancelProduction(campaignId, id),
+    onSuccess: refresh,
+    onError: (e) => setError((e as Error).message),
+  });
+  const moveCapital = useMutation({
+    mutationFn: () => api.moveCapital(campaignId, provinceId!),
+    onSuccess: refresh,
+    onError: (e) => setError((e as Error).message),
+  });
+
   if (!stateProvince) return null;
   if (detail.isLoading) return <div className="card">Loading province…</div>;
   if (detail.error) return <div className="card error">{(detail.error as Error).message}</div>;
@@ -73,6 +102,11 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
 
   const mine = p.ownerCountryId === state.me.countryId;
   const used = p.buildings.length;
+  const hasFactory = p.buildings.some((b) => b.type === 'military_factory' && b.status === 'complete');
+  const factoryUnits = UNIT_TYPES.filter((t) => UNITS[t].factoryProducible);
+  const orderCost: PartialResources = Object.fromEntries(
+    Object.entries(UNITS[unitType].cost).map(([k, v]) => [k, (v ?? 0) * quantity]),
+  );
 
   const blockReason = (type: BuildingType): string | null => {
     const def = BUILDINGS[type];
@@ -159,6 +193,76 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
           </li>
         ))}
       </ul>
+
+      {mine && hasFactory && (
+        <>
+          <h3>Factory production</h3>
+          {error && <p className="error small">{error}</p>}
+          <div className="row">
+            <select value={unitType} onChange={(e) => setUnitType(e.target.value as UnitType)}>
+              {factoryUnits.map((t) => (
+                <option key={t} value={t}>
+                  {UNITS[t].name}
+                </option>
+              ))}
+            </select>
+            <input
+              className="unit-input"
+              type="number"
+              min={1}
+              max={MAX_ORDER_QUANTITY}
+              value={quantity}
+              onChange={(e) => setQuantity(Math.max(1, Math.min(MAX_ORDER_QUANTITY, Number(e.target.value) || 1)))}
+            />
+            <button className="primary" disabled={produce.isPending || !canAfford(balance, orderCost)} onClick={() => produce.mutate()}>
+              Order
+            </button>
+          </div>
+          <p className="muted small">
+            {costText(orderCost)} · {formatDuration(scaleSeconds(UNITS[unitType].buildSeconds, state.campaign.gameSpeed))} each
+            {UNITS[unitType].upkeep.oil ? ` · uses ${UNITS[unitType].upkeep.oil} oil/h` : ''}
+          </p>
+          <ul className="list compact">
+            {p.productionQueue.map((o) => (
+              <li key={o.id}>
+                <span>
+                  {UNITS[o.unitType].name}{' '}
+                  <span className="muted small">
+                    {o.completesAt ? `ready in ${formatDuration((new Date(o.completesAt).getTime() - now) / 1000)}` : 'waiting'}
+                  </span>
+                </span>
+                {!o.completesAt && (
+                  <button className="link" disabled={cancelOrder.isPending} onClick={() => cancelOrder.mutate(o.id)}>
+                    Cancel (refund)
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {mine && !p.isCapital && (
+        <>
+          <h3>Capital</h3>
+          {state.capitalMove ? (
+            <p className="muted small">
+              Capital move under way to {PROVINCE_BY_KEY[state.capitalMove.provinceKey]?.name}, ready in{' '}
+              {formatDuration((new Date(state.capitalMove.completesAt).getTime() - now) / 1000)}.
+            </p>
+          ) : (
+            <>
+              <button disabled={moveCapital.isPending || !canAfford(balance, CAPITAL_MOVE_COST)} onClick={() => moveCapital.mutate()}>
+                Move capital here
+              </button>
+              <p className="muted small">
+                {costText(CAPITAL_MOVE_COST)} · takes {formatDuration(scaleSeconds(CAPITAL_MOVE_SECONDS, state.campaign.gameSpeed))}. The old
+                capital keeps its role until then.
+              </p>
+            </>
+          )}
+        </>
+      )}
 
       {mine && (
         <>

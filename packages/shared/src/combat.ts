@@ -56,6 +56,9 @@ export interface BattleInput {
   fortress: boolean;
   /** Province defence value. Each point adds 1% to the defenders' defence. */
   provinceDefense: number;
+  /** Extra modifiers such as an out-of-supply penalty (negative percent). */
+  attackerModifiers?: BattleModifier[];
+  defenderModifiers?: BattleModifier[];
 }
 
 export interface BattleModifier {
@@ -102,7 +105,8 @@ function totals(units: CombatUnit[], bonus: number) {
     defence += u.count * d.defense;
   }
   // A defender's bonuses lift both its defence and its counter-attack.
-  return { hp, attack: attack * (1 + bonus), defence: defence * (1 + bonus) };
+  const factor = Math.max(0.2, 1 + bonus);
+  return { hp, attack: attack * factor, defence: defence * factor };
 }
 
 /** Share of an attack that gets through the enemy's defence. 0.5 when attack equals defence. */
@@ -144,9 +148,13 @@ export function resolveBattle(input: BattleInput): BattleResult {
     modifiers.push({ side: 'defender', label: 'Fortress', percent: BUILDINGS.fortress.defenseBonus ?? 0 });
   }
   if (input.provinceDefense > 0) modifiers.push({ side: 'defender', label: 'Local defences', percent: input.provinceDefense });
-  const defenderBonus = modifiers.reduce((s, m) => s + m.percent, 0) / 100;
+  modifiers.push(...(input.attackerModifiers ?? []), ...(input.defenderModifiers ?? []));
+  const sideBonus = (side: BattleModifier['side']) =>
+    modifiers.filter((m) => m.side === side).reduce((sum, m) => sum + m.percent, 0) / 100;
+  const defenderBonus = sideBonus('defender');
+  const attackerBonus = sideBonus('attacker');
 
-  const att = totals(input.attackerUnits, 0);
+  const att = totals(input.attackerUnits, attackerBonus);
   const def = totals(input.defenderUnits, defenderBonus);
   const start: BattleStart = {
     attackerAttack: att.attack,
@@ -221,12 +229,18 @@ export function explainBattle(r: BattleResult): string[] {
     `Attackers brought ${Math.round(s.attackerAttack)} attack against the defenders' ${Math.round(s.defenderDefence)} defence. ` +
       `Defenders brought ${Math.round(s.defenderAttack)} attack against the attackers' ${Math.round(s.attackerDefence)} defence.`,
   );
-  if (r.modifiers.length > 0) {
-    const total = Math.round(r.modifiers.reduce((sum, m) => sum + m.percent, 0));
-    lines.push(`Defenders gained +${total}% attack and defence: ${r.modifiers.map((m) => `${m.label} (+${Math.round(m.percent)}%)`).join(', ')}.`);
-  } else {
-    lines.push('Neither side had a terrain, fortress or local-defence advantage.');
-  }
+  const describe = (side: BattleModifier['side'], who: string) => {
+    const mods = r.modifiers.filter((m) => m.side === side);
+    if (mods.length === 0) return null;
+    const total = Math.round(mods.reduce((sum, m) => sum + m.percent, 0));
+    const fmt = (p: number) => `${p >= 0 ? '+' : ''}${Math.round(p)}%`;
+    return `${who} ${total >= 0 ? 'gained' : 'suffered'} ${fmt(total)} attack and defence: ${mods
+      .map((m) => `${m.label} (${fmt(m.percent)})`)
+      .join(', ')}.`;
+  };
+  const modLines = [describe('attacker', 'Attackers'), describe('defender', 'Defenders')].filter((l): l is string => !!l);
+  if (modLines.length > 0) lines.push(...modLines);
+  else lines.push('Neither side had a terrain, fortress, local-defence or supply modifier.');
   const n = r.rounds.length;
   if (r.outcome === 'attacker_won') {
     lines.push(`The defenders broke after ${n} rounds. Attackers lost ${r.attackerLossPct}% of their strength, defenders ${r.defenderLossPct}%.`);

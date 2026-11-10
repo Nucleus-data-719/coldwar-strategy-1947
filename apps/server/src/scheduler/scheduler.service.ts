@@ -22,6 +22,8 @@ import {
   NotificationRow,
 } from '../db/schema';
 import { AiService } from '../ai/ai.service';
+import { CapitalService } from '../capital/capital.service';
+import { ProductionService } from '../production/production.service';
 import { MovementService } from '../military/movement.service';
 import { EconomyService } from '../economy/economy.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -45,6 +47,8 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     private readonly realtime: RealtimeService,
     private readonly ai: AiService,
     private readonly movement: MovementService,
+    private readonly production: ProductionService,
+    private readonly capital: CapitalService,
   ) {}
 
   onModuleInit() {
@@ -67,6 +71,8 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       await this.completeBuildings();
       await this.movement.processDue();
       await this.endDisruptions();
+      await this.production.processDue();
+      await this.capital.processDue();
       await this.autoRecruit();
       await this.handleInactivity();
       await this.ai.runDue();

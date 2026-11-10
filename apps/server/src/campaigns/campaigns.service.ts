@@ -38,6 +38,7 @@ import { EconomyService } from '../economy/economy.service';
 import { toFormationDto } from '../military/formation.mapper';
 import { PlayersService } from '../players/players.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { ProductionService } from '../production/production.service';
 import { WarsService } from '../wars/wars.service';
 
 function toBuildingDto(b: BuildingRow): BuildingDto {
@@ -64,6 +65,7 @@ export class CampaignsService implements OnModuleInit {
     private readonly players: PlayersService,
     private readonly realtime: RealtimeService,
     private readonly wars: WarsService,
+    private readonly production: ProductionService,
   ) {}
 
   /** Makes sure there is always a campaign to join on a fresh database. */
@@ -335,13 +337,18 @@ export class CampaignsService implements OnModuleInit {
       provinces: stateProvinces,
       formations: myFormationDtos,
       atWarWith: [...(await this.wars.enemiesOf(this.db, player.countryId))],
+      capitalMove: (() => {
+        const me = countryRows.find((c) => c.id === player.countryId);
+        const key = me?.capitalMoveProvinceId ? keyById.get(me.capitalMoveProvinceId) : undefined;
+        return key && me?.capitalMoveAt ? { provinceKey: key, completesAt: me.capitalMoveAt.toISOString() } : null;
+      })(),
       resources,
       serverTime: new Date().toISOString(),
     };
   }
 
   async getProvince(userId: string, campaignId: string, provinceId: string): Promise<ProvinceDetail> {
-    await this.players.require(userId, campaignId);
+    const viewer = await this.players.require(userId, campaignId);
     const [province] = await this.db
       .select()
       .from(provinces)
@@ -398,6 +405,7 @@ export class CampaignsService implements OnModuleInit {
       buildings: blds.map(toBuildingDto),
       formations: formationDtos,
       disruptedUntil: province.disruptedUntil ? province.disruptedUntil.toISOString() : null,
+      productionQueue: province.ownerCountryId === viewer.countryId ? await this.production.listForProvince(province.id) : [],
     };
   }
 }

@@ -29,6 +29,17 @@ Stack: React + Vite + PixiJS · NestJS · PostgreSQL (Neon) + Drizzle · Socket.
 - For now armies can only travel through **your own provinces**. Entering enemy land arrives with combat in Week 2.
 - **After updating from the earlier build, run `npm run db:push` again** to add the movement columns.
 
+## Week 3: production, army management, supply, capital move
+
+**Apply the database changes first** (`npm run db:push`, or `docs/week3.sql` in the Neon SQL editor), then restart. Existing campaigns keep working.
+
+- **Military Factory** (now active) builds **artillery, light tanks and heavy tanks** from a queue, one unit at a time. Open a province with a finished factory, pick a unit and quantity (up to 10 per order, 20 queued per factory). The price is paid when you order; a unit that has not started can be cancelled for a full refund. Finished units join that province's Garrison. The queue runs while you are offline. Research will gate the tank types later (week 5).
+- **Merge and split armies**: Armies panel, **Manage** (stationary armies only). Merge needs two armies in the same province.
+- **Supply pressure**: units cost upkeep every hour (tanks burn oil). If a resource hits zero while still being used up, the top bar turns red and your armies fight at a penalty: oil and food -20%, money -10% attack and defence. The battle report lists it. Try it: build several tanks on a small oil income.
+- **Capital move**: a province you own and that is not occupied, **Move capital here**: 2000 money + 500 steel, 24 game hours. The old capital stays in place until then. The capital has extra defence and losing it hurts, so choose a safe province. If the target is lost before it finishes, the move fails and nothing is refunded.
+
+Done when: you build a mixed army of infantry, artillery and tanks and run short of oil.
+
 ## Not built yet (next slices)
 
 Combat and province capture · research · generals · monthly missions and leaderboard · diplomacy and alliances · capital relocation · payments. The Research / Generals / Diplomacy tabs are placeholders.

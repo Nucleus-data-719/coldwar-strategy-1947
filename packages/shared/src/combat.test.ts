@@ -48,3 +48,18 @@ describe('combat', () => {
     else expect(r.attackerAfter).toEqual([]);
   });
 });
+
+describe('supply and modifiers', () => {
+  it('an out-of-supply attacker does worse and the report says so', () => {
+    const fair = winRate({ attackerUnits: inf(12) });
+    const starved = winRate({
+      attackerUnits: inf(12),
+      attackerModifiers: [{ side: 'attacker', label: 'Out of oil', percent: -40 }],
+    });
+    expect(starved).toBeLessThan(fair);
+    const r = resolveBattle(
+      base({ attackerModifiers: [{ side: 'attacker', label: 'Out of oil', percent: -20 }] }),
+    );
+    expect(explainBattle(r).some((l) => l.includes('Out of oil'))).toBe(true);
+  });
+});

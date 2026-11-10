@@ -16,6 +16,9 @@ import { AuthUser, CurrentUser } from '../common/current-user.decorator';
 import { parse } from '../common/zod';
 import { env } from '../config/env';
 import { BuildingsService } from '../buildings/buildings.service';
+import { CapitalService } from '../capital/capital.service';
+import { FormationsService } from '../military/formations.service';
+import { ProductionService } from '../production/production.service';
 import { CombatService } from '../military/combat.service';
 import { MovementService } from '../military/movement.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -26,6 +29,10 @@ import { CampaignsService } from './campaigns.service';
 const createSchema = z.object({ name: z.string().trim().min(3).max(60) });
 const joinSchema = z.object({ countryId: z.string().uuid() });
 const buildSchema = z.object({ type: z.enum(BUILDING_TYPES) });
+const produceSchema = z.object({ unitType: z.enum(UNIT_TYPES), quantity: z.number().int().min(1).max(100) });
+const mergeSchema = z.object({ intoId: z.string().uuid() });
+const splitSchema = z.object({ units: z.record(z.enum(UNIT_TYPES), z.number().int().min(0).max(100000)) });
+const capitalSchema = z.object({ provinceId: z.string().uuid() });
 const warSchema = z.object({ countryId: z.string().uuid() });
 const moveSchema = z.object({
   provinceId: z.string().uuid(),
@@ -44,6 +51,9 @@ export class CampaignsController {
     private readonly movement: MovementService,
     private readonly warsService: WarsService,
     private readonly combat: CombatService,
+    private readonly production: ProductionService,
+    private readonly formationsService: FormationsService,
+    private readonly capital: CapitalService,
   ) {}
 
   @Get()
@@ -117,6 +127,59 @@ export class CampaignsController {
     @Param('formationId', ParseUUIDPipe) formationId: string,
   ) {
     return this.movement.stop(user.id, id, formationId);
+  }
+
+  @Post(':id/provinces/:provinceId/production')
+  @HttpCode(200)
+  produce(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('provinceId', ParseUUIDPipe) provinceId: string,
+    @Body() body: unknown,
+  ) {
+    const { unitType, quantity } = parse(produceSchema, body);
+    return this.production.enqueue(user.id, id, provinceId, unitType, quantity);
+  }
+
+  @Post(':id/production/:orderId/cancel')
+  @HttpCode(200)
+  cancelProduction(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+  ) {
+    return this.production.cancel(user.id, id, orderId);
+  }
+
+  @Post(':id/formations/:formationId/merge')
+  @HttpCode(200)
+  merge(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('formationId', ParseUUIDPipe) formationId: string,
+    @Body() body: unknown,
+  ) {
+    const { intoId } = parse(mergeSchema, body);
+    return this.formationsService.merge(user.id, id, formationId, intoId);
+  }
+
+  @Post(':id/formations/:formationId/split')
+  @HttpCode(200)
+  split(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('formationId', ParseUUIDPipe) formationId: string,
+    @Body() body: unknown,
+  ) {
+    const { units } = parse(splitSchema, body);
+    return this.formationsService.split(user.id, id, formationId, units);
+  }
+
+  @Post(':id/capital')
+  @HttpCode(200)
+  moveCapital(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
+    const { provinceId } = parse(capitalSchema, body);
+    return this.capital.relocate(user.id, id, provinceId);
   }
 
   @Get(':id/wars')

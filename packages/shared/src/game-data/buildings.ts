@@ -39,10 +39,10 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   military_factory: {
     type: 'military_factory',
     name: 'Military Factory',
-    description: 'Will produce tanks and military equipment (arrives with the military update).',
+    description: 'Produces artillery and tanks, one unit at a time, from a queue.',
     cost: { money: 800, steel: 200 },
     buildSeconds: 7200,
-    effectActive: false,
+    effectActive: true,
   },
   harbor: {
     type: 'harbor',

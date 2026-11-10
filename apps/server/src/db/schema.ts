@@ -67,6 +67,9 @@ export const countries = pgTable(
     aiControlled: boolean('ai_controlled').notNull().default(true),
     stability: integer('stability').notNull().default(70),
     capitalProvinceId: uuid('capital_province_id'),
+    // A capital move in progress: the new capital takes over at capitalMoveAt.
+    capitalMoveProvinceId: uuid('capital_move_province_id'),
+    capitalMoveAt: ts('capital_move_at'),
     ...resourceColumns,
     resourcesUpdatedAt: ts('resources_updated_at').notNull().defaultNow(),
     aiNextDecisionAt: ts('ai_next_decision_at'),
@@ -210,6 +213,32 @@ export const notifications = pgTable(
   (t) => [index('notifications_country_idx').on(t.countryId, t.createdAt)],
 );
 
+export const productionOrders = pgTable(
+  'production_orders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    countryId: uuid('country_id')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    // The province with the military factory.
+    provinceId: uuid('province_id')
+      .notNull()
+      .references(() => provinces.id, { onDelete: 'cascade' }),
+    unitType: text('unit_type').$type<UnitType>().notNull(),
+    position: integer('position').notNull(),
+    // Set only on the unit currently being built.
+    completesAt: ts('completes_at'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('production_orders_province_idx').on(t.provinceId, t.position),
+    index('production_orders_due_idx').on(t.completesAt),
+  ],
+);
+
 export const wars = pgTable(
   'wars',
   {
@@ -266,3 +295,4 @@ export type FormationUnitRow = typeof formationUnits.$inferSelect;
 export type NotificationRow = typeof notifications.$inferSelect;
 export type WarRow = typeof wars.$inferSelect;
 export type BattleReportRow = typeof battleReports.$inferSelect;
+export type ProductionOrderRow = typeof productionOrders.$inferSelect;
