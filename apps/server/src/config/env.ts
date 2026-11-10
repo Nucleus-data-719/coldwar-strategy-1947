@@ -28,6 +28,7 @@ const schema = z.object({
   TICK_MS: z.coerce.number().int().min(500).default(5000),
   INACTIVITY_HOURS: z.coerce.number().positive().default(48),
   AI_INTERVAL_SECONDS: z.coerce.number().positive().default(300),
+  AI_WAR_INTERVAL_SECONDS: z.coerce.number().positive().default(60),
   SCHEDULER_ENABLED: bool('true'),
   ALLOW_CAMPAIGN_CREATION: bool('true'),
 });

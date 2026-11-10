@@ -81,6 +81,38 @@ Done when: you build a mixed army of infantry, artillery and tanks and run short
 - **Not in yet:** peace treaties. A war still lasts until the campaign ends.
 - **Before you start:** run `docs/week7.sql` in the Neon SQL editor, then restart.
 
+## Week 8: air, navy and AI warfare
+
+**No SQL this week** (no database changes). Copy the files over and restart. Optionally add `AI_WAR_INTERVAL_SECONDS=60` to your `.env` (it defaults to 60).
+
+- **Airbase** builds fighters, bombers and air support aircraft. **Harbor** (coastal provinces) builds submarines, destroyers, cruisers and battleships. Both need the unit researched first (Air and Naval branches). A province's buildings share one production queue; finished units join its garrison.
+- **Air (basic):** aircraft fight in battles with their own stats. A side with more fighters than the enemy gets **Air superiority +8%**; an army with air support aircraft and land troops gets **Close air support +6%**. Both show in the battle report.
+- **Navy (basic):** any army that contains a ship can only move between **coastal** provinces. Ships fight with their own stats when they attack or defend a coastal province. **Ships and aircraft cannot occupy land:** if a force with no land units wins, it destroys the defenders but the province stays with its owner and the force stays where it was. Split ships off a garrison before moving it.
+- **AI warfare:** AI countries that are at war now decide every minute (not every 5) and:
+  - **Defend:** if enemy armies are in or heading to a province, or sit next to it, and the AI has less power there than the threat, it recruits emergency infantry there (up to 4 per province, 8 per decision, paid from its stockpile).
+  - **Build up:** next to a lost home province it masses enough troops to retake it.
+  - **Counterattack:** a province with a clearly stronger stack (1.5x the defender, always leaving 2 infantry behind) attacks an adjacent enemy-held province, home provinces first, through the normal movement and combat rules. At most 2 attacks per decision.
+  - It still never declares war on its own. Allies honour defence calls (Week 7).
+- The AI planner is a pure function in `packages/shared/src/ai-war.ts` with its own tests.
+
+## Map resource icons
+
+Zoom in to see a small icon on each deposit province: **oil** (drop), **steel** (ingot), **electronics** (bolt) or **rare materials** (gem). A **doubled region** gets a gold ring and **x2**. They are drawn as vectors in `features/world-map/resource-icons.ts`, so there are no image files to manage.
+
+## Performance (to do when hosted)
+
+Actions currently take several seconds because each request makes many sequential database round trips to a remote database from your own computer (starting research reads the country, buildings, provinces and research tables several times, inside a row lock). Planned fix once the game is deployed next to its database: cache the research and building summaries per country, batch the reads into fewer queries, and add timing logs per request.
+
+## Map rebalance (before Week 9)
+
+- **Fair sizes:** big countries (USA, Soviet Union, China, India, Brazil) have **10** provinces, medium countries (UK, France, Turkey) **8**, and every AI-run country **4 or fewer**. The world now has 166 provinces.
+- **Resources:** every province produces money, food and manpower (differences come from terrain, not luck). **Oil, steel, electronics and rare materials come only from deposit provinces**, one deposit per province, with fixed output (oil 24, steel 28, electronics 8, rare 5 per hour).
+- **Double-resource regions:** every country has one or two provinces where its deposit produces **twice** as much. Big countries have 2, medium and AI-run countries 1. Doubled provinces get a 4th building slot.
+- **Same size, same wealth:** all big countries have exactly the same strategic output (2 steel deposits, 2 oil, 1 electronics, 1 rare, two of them doubled); all medium countries too (2 steel, 1 oil, 1 electronics, 1 rare, one doubled). A test checks this. The deposit locations are historical where possible and adjusted where fairness needed it. "Iron" is the steel resource.
+- **Map icons:** a deposit province shows its resource icon; doubled regions get a gold ring and x2.
+- To tune the map: edit `packages/shared/scripts/map-source.mjs` (deposit, doubled flag) and run `node packages/shared/scripts/generate-map.mjs`. The balance test (`map-balance.test.ts`) will tell you if you break the rules.
+- **Before you start:** run `docs/map-rebalance.sql` in the Neon SQL editor. It deletes all old campaigns (accounts stay), then restart; a fresh campaign is created automatically.
+
 ## Not built yet (next slices)
 
 Combat and province capture · research · generals · monthly missions and leaderboard · diplomacy and alliances · capital relocation · payments. The Research / Generals / Diplomacy tabs are placeholders.
@@ -112,6 +144,7 @@ Open http://localhost:5173, register, pick a country in the lobby, and play.
 | `TICK_MS` | How often the server checks timers (default 5000) |
 | `INACTIVITY_HOURS` | Hours before AI takes over a player (default 48) |
 | `AI_INTERVAL_SECONDS` | Seconds between AI decisions (divided by `GAME_SPEED`) |
+| `AI_WAR_INTERVAL_SECONDS` | Same, for an AI country that is at war (default 60) |
 | `SCHEDULER_ENABLED` | Set `false` to stop timers (for example on a second instance) |
 | `ALLOW_CAMPAIGN_CREATION` | Set `false` to stop players creating campaigns |
 

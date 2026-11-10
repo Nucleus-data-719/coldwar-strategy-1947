@@ -5,7 +5,9 @@ import {
   UNITS,
   advanceMovement,
   formationSpeed,
+  isNavalFormation,
   planRoute,
+  canOccupyLand,
   type UnitType,
 } from '@cw/shared';
 import { env } from '../config/env';
@@ -126,69 +128,84 @@ export class MovementService {
   ) {
     const player = await this.players.require(userId, campaignId);
 
-    const result = await this.economy.lock(player.countryId, async (tx, country) => {
-      const [formation] = await tx
-        .select()
-        .from(formations)
-        .where(and(eq(formations.id, formationId), eq(formations.campaignId, campaignId)))
-        .for('update');
-      if (!formation || formation.countryId !== country.id) throw new NotFoundException('Army not found');
-
-      const ctx = await this.loadContext(tx, campaignId);
-      const destKey = ctx.keyById.get(destinationProvinceId);
-      if (!destKey) throw new NotFoundException('Province not found');
-
-      const moving = !!formation.moveArrivesAt && !!formation.moveNextProvinceId;
-      let target: FormationRow = formation;
-      const unitRows = await tx.select().from(formationUnits).where(eq(formationUnits.formationId, formation.id));
-      let units: { unitType: UnitType; count: number }[] = unitRows;
-
-      if (send && Object.keys(send).length > 0) {
-        if (moving) throw new BadRequestException('An army that is already moving cannot be split');
-        ({ target, units } = await this.split(tx, formation, unitRows, send));
-      }
-
-      const speed = formationSpeed(units);
-      if (speed <= 0) throw new BadRequestException('This army has no units');
-
-      const startId = moving ? target.moveNextProvinceId! : target.provinceId;
-      const startKey = ctx.keyById.get(startId)!;
-      if (!moving && startKey === destKey) throw new BadRequestException('The army is already in that province');
-
-      const route = planRoute(startKey, destKey, {
-        countryId: country.id,
-        ownerByKey: ctx.ownerByKey,
-        atWarWith: await this.wars.enemiesOf(tx, country.id),
-        railwayKeys: ctx.railwayKeys,
-        speed,
-        gameSpeed: env.GAME_SPEED,
-      });
-      if (!route) {
-        throw new BadRequestException(
-          'No route. Armies can cross your own land and the land of countries you are at war with. Declare war first to attack.',
-        );
-      }
-
-      const ids = route.path.map((k) => ctx.idByKey.get(k)!);
-      if (moving) {
-        await tx.update(formations).set({ movePath: ids.slice(1) }).where(eq(formations.id, target.id));
-      } else {
-        const now = new Date();
-        await tx
-          .update(formations)
-          .set({
-            moveNextProvinceId: ids[1],
-            movePath: ids.slice(2),
-            moveStartedAt: now,
-            moveArrivesAt: new Date(now.getTime() + route.legSeconds[0] * 1000),
-          })
-          .where(eq(formations.id, target.id));
-      }
-      return { formationId: target.id, etaSeconds: route.totalSeconds };
-    });
+    const result = await this.economy.lock(player.countryId, (tx, country) =>
+      this.orderFor(tx, country, campaignId, formationId, destinationProvinceId, send),
+    );
 
     this.realtime.campaignUpdate(campaignId, { kind: 'move' });
     return { ok: true, ...result };
+  }
+
+  /** The core of a move order. Must run inside a lock on `country`. The AI uses it too. */
+  async orderFor(
+    tx: DbOrTx,
+    country: CountryRow,
+    campaignId: string,
+    formationId: string,
+    destinationProvinceId: string,
+    send?: Partial<Record<UnitType, number>>,
+  ): Promise<{ formationId: string; etaSeconds: number }> {
+    const [formation] = await tx
+      .select()
+      .from(formations)
+      .where(and(eq(formations.id, formationId), eq(formations.campaignId, campaignId)))
+      .for('update');
+    if (!formation || formation.countryId !== country.id) throw new NotFoundException('Army not found');
+
+    const ctx = await this.loadContext(tx, campaignId);
+    const destKey = ctx.keyById.get(destinationProvinceId);
+    if (!destKey) throw new NotFoundException('Province not found');
+
+    const moving = !!formation.moveArrivesAt && !!formation.moveNextProvinceId;
+    let target: FormationRow = formation;
+    const unitRows = await tx.select().from(formationUnits).where(eq(formationUnits.formationId, formation.id));
+    let units: { unitType: UnitType; count: number }[] = unitRows;
+
+    if (send && Object.keys(send).length > 0) {
+      if (moving) throw new BadRequestException('An army that is already moving cannot be split');
+      ({ target, units } = await this.split(tx, formation, unitRows, send));
+    }
+
+    const speed = formationSpeed(units);
+    if (speed <= 0) throw new BadRequestException('This army has no units');
+
+    const startId = moving ? target.moveNextProvinceId! : target.provinceId;
+    const startKey = ctx.keyById.get(startId)!;
+    if (!moving && startKey === destKey) throw new BadRequestException('The army is already in that province');
+
+    const route = planRoute(startKey, destKey, {
+      countryId: country.id,
+      ownerByKey: ctx.ownerByKey,
+      atWarWith: await this.wars.enemiesOf(tx, country.id),
+      railwayKeys: ctx.railwayKeys,
+      speed,
+      gameSpeed: env.GAME_SPEED,
+      coastalOnly: isNavalFormation(units),
+    });
+    if (!route) {
+      throw new BadRequestException(
+        isNavalFormation(units)
+          ? 'No sea route. Ships can only sail between coastal provinces.'
+          : 'No route. Armies can cross your own land and the land of countries you are at war with. Declare war first to attack.',
+      );
+    }
+
+    const ids = route.path.map((k) => ctx.idByKey.get(k)!);
+    if (moving) {
+      await tx.update(formations).set({ movePath: ids.slice(1) }).where(eq(formations.id, target.id));
+    } else {
+      const now = new Date();
+      await tx
+        .update(formations)
+        .set({
+          moveNextProvinceId: ids[1],
+          movePath: ids.slice(2),
+          moveStartedAt: now,
+          moveArrivesAt: new Date(now.getTime() + route.legSeconds[0] * 1000),
+        })
+        .where(eq(formations.id, target.id));
+    }
+    return { formationId: target.id, etaSeconds: route.totalSeconds };
   }
 
   /** Player command: halt after the current leg. */
@@ -306,6 +323,14 @@ export class MovementService {
       notes.push(...outcome.notes);
       fought = true;
       if (!outcome.won) return notes; // the army no longer exists
+      if (!outcome.captured) {
+        // Ships and aircraft cannot occupy land: they stay where they were.
+        await tx
+          .update(formations)
+          .set({ provinceId: ctx.idByKey.get(result.locationKey)!, moveNextProvinceId: null, movePath: [], moveStartedAt: null, moveArrivesAt: null })
+          .where(eq(formations.id, f.id));
+        return notes;
+      }
 
       ctx.ownerByKey.set(result.targetKey, countryId);
       units = await tx.select().from(formationUnits).where(eq(formationUnits.formationId, f.id));

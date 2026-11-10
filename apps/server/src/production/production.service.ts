@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, inArray, isNotNull, lte } from 'drizzle-orm';
 import {
+  BUILDINGS,
   FACTORY_QUEUE_LIMIT,
   MAX_ORDER_QUANTITY,
   UNITS,
@@ -53,6 +54,7 @@ export class ProductionService {
   async enqueue(userId: string, campaignId: string, provinceId: string, unitType: UnitType, quantity: number) {
     const def = UNITS[unitType];
     if (!def?.factoryProducible) throw new BadRequestException(`${def?.name ?? unitType} cannot be built in a factory yet`);
+    const needed = def.producedAt!;
     if (quantity < 1 || quantity > MAX_ORDER_QUANTITY) {
       throw new BadRequestException(`Order between 1 and ${MAX_ORDER_QUANTITY} units at a time`);
     }
@@ -74,9 +76,9 @@ export class ProductionService {
         .select({ id: buildings.id })
         .from(buildings)
         .where(
-          and(eq(buildings.provinceId, province.id), eq(buildings.type, 'military_factory'), eq(buildings.status, 'complete')),
+          and(eq(buildings.provinceId, province.id), eq(buildings.type, needed), eq(buildings.status, 'complete')),
         );
-      if (!factory) throw new BadRequestException('This province has no completed Military Factory');
+      if (!factory) throw new BadRequestException(`${def.name} needs a completed ${BUILDINGS[needed].name} in this province`);
 
       const queued = await tx
         .select({ id: productionOrders.id, position: productionOrders.position })

@@ -6,6 +6,8 @@ import {
   OCCUPATION_DISRUPTION_SECONDS,
   CAPITAL_DEFENSE,
   explainBattle,
+  airModifiers,
+  canOccupyLand,
   generalModifiers,
   GENERAL_XP_LOSS,
   GENERAL_XP_WALKOVER,
@@ -44,6 +46,8 @@ import { PlayersService } from '../players/players.service';
 
 export interface AttackOutcome {
   won: boolean;
+  /** False when the attackers won but have no land units to occupy the province. */
+  captured: boolean;
   /** What is left of the attacking army (empty if it was destroyed). */
   attackerUnits: CombatUnit[];
   notes: NotificationRow[];
@@ -136,16 +140,19 @@ export class CombatService {
       provinceDefense: province.defense,
       attackerModifiers: [
         ...(await researchMods(attacker, 'attacker')),
+        ...airModifiers('attacker', attackerBefore, defenderBefore),
         ...generalModifiers('attacker', attGenerals.map((g) => toDeployed(g, attackerBefore)), a.arrivedAt),
         ...(await supplyMods(attacker, attackerBalance, 'attacker')),
       ],
       defenderModifiers: [
         ...(await researchMods(defender, 'defender')),
+        ...airModifiers('defender', defenderBefore, attackerBefore),
         ...generalModifiers('defender', defGenerals.map((g) => toDeployed(g, defUnitsOf(g.deployedFormationId!))), a.arrivedAt),
         ...(await supplyMods(defender, defenderBalance, 'defender')),
       ],
     });
     const won = result.outcome === 'attacker_won';
+    const captured = won && canOccupyLand(attackerBefore);
 
     // --- apply losses ---------------------------------------------------------------------
     if (won) {
@@ -190,7 +197,12 @@ export class CombatService {
     const summary = walkover
       ? [`${province.name} had no defenders and was taken without a fight.`]
       : explainBattle(result);
-    if (won) {
+    if (won && !captured) {
+      summary.push(
+        `${attacker.name}'s ships and aircraft destroyed the defenders of ${province.name} but cannot occupy land without ground troops.`,
+      );
+    }
+    if (captured) {
       const until = new Date(a.arrivedAt + (OCCUPATION_DISRUPTION_SECONDS / env.GAME_SPEED) * 1000);
       await tx
         .update(provinces)
@@ -255,9 +267,9 @@ export class CombatService {
           modifiers: result.modifiers,
           rounds: result.rounds,
           summary,
-          capturedProvince: won,
+          capturedProvince: captured,
           capturedCapital,
-          attackerFate: won ? 'advanced' : 'destroyed',
+          attackerFate: captured ? 'advanced' : won ? 'retreated' : 'destroyed',
         },
       });
 
@@ -268,22 +280,26 @@ export class CombatService {
         countryId: attacker.id,
         type: won ? 'battle_won' : 'battle_lost',
         message: won
-          ? `${formation.name} captured ${province.name} from ${defender.name}.`
+          ? captured
+            ? `${formation.name} captured ${province.name} from ${defender.name}.`
+            : `${formation.name} destroyed the defenders of ${province.name} but cannot occupy it without land troops.`
           : `${formation.name} was destroyed attacking ${province.name}.`,
       }),
       await this.notifications.add(tx, {
         campaignId: attacker.campaignId,
         countryId: defender.id,
-        type: won ? 'province_lost' : 'battle_held',
+        type: captured ? 'province_lost' : won ? 'battle_lost' : 'battle_held',
         message: won
-          ? `${attacker.name} captured ${province.name}${capturedCapital ? ', your capital' : ''}!`
+          ? captured
+            ? `${attacker.name} captured ${province.name}${capturedCapital ? ', your capital' : ''}!`
+            : `${attacker.name}'s ships and aircraft destroyed your forces in ${province.name}. The province is still yours.`
           : `Your forces held ${province.name} against ${attacker.name}.`,
       }),
     );
     for (const n of aftermath.notes) {
       notes.push(await this.notifications.add(tx, { campaignId: attacker.campaignId, ...n }));
     }
-    return { won, attackerUnits: result.attackerAfter, notes };
+    return { won, captured, attackerUnits: result.attackerAfter, notes };
   }
 
   /** The most recent battles your country took part in. */

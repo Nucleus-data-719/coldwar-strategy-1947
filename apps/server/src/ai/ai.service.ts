@@ -11,6 +11,7 @@ import {
 import { env } from '../config/env';
 import { DB, Db } from '../db/db.module';
 import { buildings, campaigns, countries, provinces } from '../db/schema';
+import { AiWarService } from './ai-war.service';
 import { BuildingsService } from '../buildings/buildings.service';
 import { EconomyService } from '../economy/economy.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -29,7 +30,11 @@ export class AiService {
     private readonly economy: EconomyService,
     private readonly buildingsService: BuildingsService,
     private readonly realtime: RealtimeService,
+    private readonly war: AiWarService,
   ) {}
+
+  /** Countries that were at war at their last decision. They decide more often. */
+  private readonly atWar = new Set<string>();
 
   /** Processes every AI country whose decision time has come. */
   async runDue(): Promise<void> {
@@ -55,7 +60,8 @@ export class AiService {
         this.log.warn(`AI decision failed for ${c.id}: ${(err as Error).message}`);
       } finally {
         // Always schedule the next decision, so a persistent error cannot spin every tick.
-        const nextMs = Math.max(5, env.AI_INTERVAL_SECONDS / env.GAME_SPEED) * 1000;
+        const interval = this.atWar.has(c.id) ? env.AI_WAR_INTERVAL_SECONDS : env.AI_INTERVAL_SECONDS;
+        const nextMs = Math.max(5, interval / env.GAME_SPEED) * 1000;
         await this.db
           .update(countries)
           .set({ aiNextDecisionAt: new Date(Date.now() + nextMs) })
@@ -70,8 +76,14 @@ export class AiService {
       if (!country.aiControlled) return false;
       let balance = await this.economy.settle(tx, country);
 
+      // War first: reinforce the front and counterattack.
+      const war = await this.war.act(tx, country, balance);
+      balance = war.balance;
+      if (war.atWar) this.atWar.add(countryId);
+      else this.atWar.delete(countryId);
+
       const owned = await tx.select().from(provinces).where(eq(provinces.ownerCountryId, countryId));
-      if (owned.length === 0) return false;
+      if (owned.length === 0) return war.acted;
       const blds = await tx
         .select()
         .from(buildings)
@@ -132,7 +144,7 @@ export class AiService {
         typesIn.set(w.provinceId, set);
         started++;
       }
-      return started > 0;
+      return started > 0 || war.acted;
     });
   }
 }

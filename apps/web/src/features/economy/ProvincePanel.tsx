@@ -79,7 +79,7 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
     qc.invalidateQueries({ queryKey: ['province', campaignId] });
   };
   const produce = useMutation({
-    mutationFn: () => api.produce(campaignId, provinceId!, unitType, quantity),
+    mutationFn: (type: UnitType) => api.produce(campaignId, provinceId!, type, quantity),
     onSuccess: refresh,
     onError: (e) => setError((e as Error).message),
   });
@@ -102,10 +102,15 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
 
   const mine = p.ownerCountryId === state.me.countryId;
   const used = p.buildings.length;
-  const hasFactory = p.buildings.some((b) => b.type === 'military_factory' && b.status === 'complete');
-  const factoryUnits = UNIT_TYPES.filter((t) => UNITS[t].factoryProducible && state.research.unlockedUnits.includes(t));
+  const completeTypes = new Set(p.buildings.filter((b) => b.status === 'complete').map((b) => b.type));
+  const hasFactory = ['military_factory', 'airbase', 'harbor'].some((t) => completeTypes.has(t as BuildingType));
+  const factoryUnits = UNIT_TYPES.filter((t) => {
+    const def = UNITS[t];
+    return def.factoryProducible && !!def.producedAt && completeTypes.has(def.producedAt) && state.research.unlockedUnits.includes(t);
+  });
+  const chosen: UnitType = factoryUnits.includes(unitType) ? unitType : (factoryUnits[0] ?? unitType);
   const orderCost: PartialResources = Object.fromEntries(
-    Object.entries(UNITS[unitType].cost).map(([k, v]) => [k, (v ?? 0) * quantity]),
+    Object.entries(UNITS[chosen].cost).map(([k, v]) => [k, (v ?? 0) * quantity]),
   );
 
   const blockReason = (type: BuildingType): string | null => {
@@ -196,11 +201,12 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
 
       {mine && hasFactory && (
         <>
-          <h3>Factory production</h3>
-          <p className="muted small">More units (tanks, aircraft, ships) unlock in the Research tab.</p>
+          <h3>Production</h3>
+          <p className="muted small">Factories build artillery and tanks, airbases aircraft, harbors ships. More unlock in the Research tab. All of a province's buildings share one queue.</p>
+          {factoryUnits.length === 0 && <p className="warn small">Nothing to build here yet: research the units for the buildings in this province.</p>}
           {error && <p className="error small">{error}</p>}
           <div className="row">
-            <select value={unitType} onChange={(e) => setUnitType(e.target.value as UnitType)}>
+            <select value={chosen} onChange={(e) => setUnitType(e.target.value as UnitType)}>
               {factoryUnits.map((t) => (
                 <option key={t} value={t}>
                   {UNITS[t].name}
@@ -215,13 +221,13 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
               value={quantity}
               onChange={(e) => setQuantity(Math.max(1, Math.min(MAX_ORDER_QUANTITY, Number(e.target.value) || 1)))}
             />
-            <button className="primary" disabled={produce.isPending || !canAfford(balance, orderCost)} onClick={() => produce.mutate()}>
+            <button className="primary" disabled={produce.isPending || factoryUnits.length === 0 || !canAfford(balance, orderCost)} onClick={() => produce.mutate(chosen)}>
               Order
             </button>
           </div>
           <p className="muted small">
-            {costText(orderCost)} · {formatDuration(scaleSeconds(UNITS[unitType].buildSeconds, state.campaign.gameSpeed))} each
-            {UNITS[unitType].upkeep.oil ? ` · uses ${UNITS[unitType].upkeep.oil} oil/h` : ''}
+            {costText(orderCost)} · {formatDuration(scaleSeconds(UNITS[chosen].buildSeconds, state.campaign.gameSpeed))} each
+            {UNITS[chosen].upkeep.oil ? ` · uses ${UNITS[chosen].upkeep.oil} oil/h` : ''}
           </p>
           <ul className="list compact">
             {p.productionQueue.map((o) => (

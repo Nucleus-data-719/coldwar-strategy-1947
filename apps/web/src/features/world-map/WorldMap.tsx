@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Application, Container, Graphics, Text } from 'pixi.js';
+import { drawResourceIcon, resourceIconsFor } from './resource-icons';
 import {
   MAP_HEIGHT,
   MAP_WIDTH,
@@ -68,6 +69,8 @@ interface Shape {
   g: Graphics;
   label: Text;
   nameLabel: Text;
+  /** Small resource icons (oil, steel, ...). Doubled deposits get a gold ring and x2. */
+  icons: Container | null;
 }
 
 interface Ctx {
@@ -152,7 +155,7 @@ export function WorldMap({
             if (!dragMoved.current) onSelectRef.current(geo.key);
           });
           world.addChild(g);
-          shapes.set(geo.key, { g, label: null as unknown as Text, nameLabel: null as unknown as Text });
+          shapes.set(geo.key, { g, label: null as unknown as Text, nameLabel: null as unknown as Text, icons: null });
         }
         // Labels are added after all shapes so neighbours never paint over them.
         for (const geo of PROVINCES) {
@@ -183,12 +186,51 @@ export function WorldMap({
           shapes.get(geo.key)!.nameLabel = nameLabel;
         }
 
+        // Resource icons: oil, steel, electronics and rare materials wherever the province produces them,
+        // and any resource that is a doubled hot spot.
+        for (const geo of PROVINCES) {
+          const kinds = resourceIconsFor(geo);
+          if (kinds.length === 0) continue;
+          const row = new Container();
+          row.eventMode = 'none';
+          const step = 17;
+          const width = kinds.length * step;
+          const backing = new Graphics();
+          backing.roundRect(-width / 2 - 1, -10, width + 2, 20, 7).fill({ color: 0x000000, alpha: 0.5 });
+          row.addChild(backing);
+          kinds.forEach((k, i) => {
+            const x = -width / 2 + step / 2 + i * step;
+            const ic = new Graphics();
+            drawResourceIcon(ic, k.kind, x, k.doubled);
+            row.addChild(ic);
+            if (k.doubled) {
+              const t = new Text({
+                text: '×2',
+                style: { fontSize: 9, fill: 0xffe27a, fontFamily: 'sans-serif', fontWeight: 'bold', stroke: { color: 0x000000, width: 2 } },
+              });
+              t.anchor.set(0, 0.5);
+              t.position.set(x + 4, 6);
+              row.addChild(t);
+            }
+          });
+          row.visible = false;
+          world.addChild(row);
+          shapes.get(geo.key)!.icons = row;
+        }
+
         // Keep labels a readable size at every zoom, and only show detail when zoomed in.
         let lastScale = -1;
         const syncLabels = () => {
           const sc = world.scale.x;
           if (sc === lastScale) return;
           lastScale = sc;
+          for (const geo of PROVINCES) {
+            const icons = shapes.get(geo.key)!.icons;
+            if (!icons) continue;
+            icons.visible = sc >= 0.9;
+            icons.scale.set(0.9 / sc);
+            icons.position.set(geo.center.x, geo.center.y - 15 / sc);
+          }
           for (const { label, nameLabel } of shapes.values()) {
             label.visible = sc >= 0.7;
             label.scale.set(0.9 / sc);

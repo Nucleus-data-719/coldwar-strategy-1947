@@ -1,4 +1,4 @@
-import type { PartialResources, UnitType } from '../types';
+import type { BuildingType, PartialResources, UnitType } from '../types';
 
 export interface UnitDef {
   type: UnitType;
@@ -14,8 +14,10 @@ export interface UnitDef {
   upkeep: PartialResources;
   /** Can be recruited in the current build. */
   recruitable: boolean;
-  /** Military factories can produce it. */
+  /** Can be built in a production building (see producedAt). */
   factoryProducible: boolean;
+  /** The building a province needs to build it. */
+  producedAt: BuildingType | null;
   /** Base seconds a factory needs for one unit (divided by GAME_SPEED). */
   buildSeconds: number;
 }
@@ -33,6 +35,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
     upkeep: { food: 1, money: 0.5 },
     recruitable: true,
     factoryProducible: false,
+    producedAt: null,
     buildSeconds: 0,
   },
   artillery: {
@@ -47,6 +50,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
     upkeep: { food: 1, money: 1, steel: 0.2 },
     recruitable: false,
     factoryProducible: true,
+    producedAt: 'military_factory',
     buildSeconds: 1800,
   },
   light_tank: {
@@ -61,6 +65,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
     upkeep: { money: 1.5, oil: 0.6 },
     recruitable: false,
     factoryProducible: true,
+    producedAt: 'military_factory',
     buildSeconds: 3600,
   },
   heavy_tank: {
@@ -75,6 +80,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
     upkeep: { money: 2.5, oil: 1.4 },
     recruitable: false,
     factoryProducible: true,
+    producedAt: 'military_factory',
     buildSeconds: 7200,
   },
   fighter: {
@@ -88,8 +94,9 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 300, steel: 60, oil: 30, electronics: 5, manpower: 20 },
     upkeep: { money: 2, oil: 1 },
     recruitable: false,
-    factoryProducible: false,
-    buildSeconds: 0,
+    factoryProducible: true,
+    producedAt: 'airbase',
+    buildSeconds: 3600,
   },
   bomber: {
     type: 'bomber',
@@ -102,8 +109,9 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 450, steel: 90, oil: 60, electronics: 8, manpower: 30 },
     upkeep: { money: 3, oil: 1.6 },
     recruitable: false,
-    factoryProducible: false,
-    buildSeconds: 0,
+    factoryProducible: true,
+    producedAt: 'airbase',
+    buildSeconds: 5400,
   },
   air_support: {
     type: 'air_support',
@@ -116,8 +124,9 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 350, steel: 70, oil: 40, electronics: 6, manpower: 20 },
     upkeep: { money: 2.2, oil: 1.2 },
     recruitable: false,
-    factoryProducible: false,
-    buildSeconds: 0,
+    factoryProducible: true,
+    producedAt: 'airbase',
+    buildSeconds: 4500,
   },
   submarine: {
     type: 'submarine',
@@ -130,8 +139,9 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 400, steel: 150, oil: 40, manpower: 40 },
     upkeep: { money: 2, oil: 0.8 },
     recruitable: false,
-    factoryProducible: false,
-    buildSeconds: 0,
+    factoryProducible: true,
+    producedAt: 'harbor',
+    buildSeconds: 5400,
   },
   destroyer: {
     type: 'destroyer',
@@ -144,8 +154,9 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 380, steel: 160, oil: 45, manpower: 60 },
     upkeep: { money: 2, oil: 0.9 },
     recruitable: false,
-    factoryProducible: false,
-    buildSeconds: 0,
+    factoryProducible: true,
+    producedAt: 'harbor',
+    buildSeconds: 5400,
   },
   cruiser: {
     type: 'cruiser',
@@ -158,8 +169,9 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 700, steel: 300, oil: 80, manpower: 100 },
     upkeep: { money: 3.5, oil: 1.6 },
     recruitable: false,
-    factoryProducible: false,
-    buildSeconds: 0,
+    factoryProducible: true,
+    producedAt: 'harbor',
+    buildSeconds: 9000,
   },
   battleship: {
     type: 'battleship',
@@ -172,7 +184,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     cost: { money: 1400, steel: 650, oil: 160, manpower: 200 },
     upkeep: { money: 6, oil: 3 },
     recruitable: false,
-    factoryProducible: false,
-    buildSeconds: 0,
+    factoryProducible: true,
+    producedAt: 'harbor',
+    buildSeconds: 14400,
   },
 };

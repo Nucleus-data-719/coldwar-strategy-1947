@@ -47,19 +47,19 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   harbor: {
     type: 'harbor',
     name: 'Harbor',
-    description: 'Coastal only. Will enable naval production (arrives with the military update).',
+    description: 'Coastal only. Builds submarines, destroyers, cruisers and battleships once they are researched.',
     cost: { money: 600, steel: 150 },
     buildSeconds: 5400,
     requiresCoastal: true,
-    effectActive: false,
+    effectActive: true,
   },
   airbase: {
     type: 'airbase',
     name: 'Airbase',
-    description: 'Will allow aircraft deployment (arrives with the military update).',
+    description: 'Builds fighters, bombers and air support aircraft once they are researched.',
     cost: { money: 900, steel: 250, oil: 50 },
     buildSeconds: 7200,
-    effectActive: false,
+    effectActive: true,
   },
   research_lab: {
     type: 'research_lab',

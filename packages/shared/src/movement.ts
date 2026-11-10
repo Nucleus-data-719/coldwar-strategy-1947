@@ -17,6 +17,14 @@ export const RAILWAY_MOVE_MULT = 0.5;
 /** Distance between neighbouring province centres on the placeholder map. */
 export const MAP_UNITS_PER_PROVINCE = 100;
 
+/** An army that contains any ship can only sail along coastal provinces. */
+export const isNavalFormation = (units: { unitType: UnitType; count: number }[]): boolean =>
+  units.some((u) => u.count > 0 && UNITS[u.unitType].category === 'naval');
+
+/** A force of only ships and aircraft cannot occupy land. */
+export const canOccupyLand = (units: { unitType: UnitType; count: number }[]): boolean =>
+  units.some((u) => u.count > 0 && UNITS[u.unitType].category === 'land');
+
 /** A formation moves at the speed of its slowest unit. 0 means it has no units. */
 export function formationSpeed(units: { unitType: UnitType; count: number }[]): number {
   let slowest = Infinity;
@@ -68,6 +76,8 @@ export interface RouteContext {
   railwayKeys: ReadonlySet<string>;
   speed: number;
   gameSpeed: number;
+  /** Ships: only coastal provinces may be entered. */
+  coastalOnly?: boolean;
 }
 
 export interface Route {
@@ -81,7 +91,8 @@ export interface Route {
 const hasRail = (ctx: RouteContext, a: string, b: string) => ctx.railwayKeys.has(a) && ctx.railwayKeys.has(b);
 
 const canEnter = (ctx: RouteContext, key: string) =>
-  relationOf(ctx.ownerByKey.get(key), ctx.countryId, ctx.atWarWith) !== 'blocked';
+  relationOf(ctx.ownerByKey.get(key), ctx.countryId, ctx.atWarWith) !== 'blocked' &&
+  (!ctx.coastalOnly || PROVINCE_BY_KEY[key]?.isCoastal === true);
 
 /**
  * Fastest route over province adjacency (Dijkstra on travel time).

@@ -1,5 +1,5 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, notInArray } from 'drizzle-orm';
 import {
   BUILDINGS,
   COUNTRIES,
@@ -70,12 +70,13 @@ export class CampaignsService implements OnModuleInit {
     private readonly production: ProductionService,
   ) {}
 
-  /** Campaigns made before the real world map (province keys like p0_0) cannot be played any more. */
+  /** Campaigns made on an older map (any province key that no longer exists) cannot be played any more. */
   private async legacyCampaignIds(): Promise<Set<string>> {
+    const current = PROVINCES.map((p) => p.key);
     const rows = await this.db
       .selectDistinct({ id: provinces.campaignId })
       .from(provinces)
-      .where(sql`${provinces.key} ~ '^p[0-9]+_[0-9]+$'`);
+      .where(notInArray(provinces.key, current));
     return new Set(rows.map((r) => r.id));
   }
 
@@ -85,7 +86,7 @@ export class CampaignsService implements OnModuleInit {
       const legacy = await this.legacyCampaignIds();
       if (legacy.size > 0) {
         this.log.warn(
-          `${legacy.size} campaign(s) use the old placeholder map and are hidden. Delete them with: DELETE FROM campaigns WHERE id IN (...) (see docs/week4.sql).`,
+          `${legacy.size} campaign(s) were made on an older map and are hidden. Delete them with the SQL in docs/map-rebalance.sql.`,
         );
       }
       const existing = (await this.db.select({ id: campaigns.id }).from(campaigns)).filter((c) => !legacy.has(c.id));

@@ -26,88 +26,76 @@ export const WATERS = {
 };
 
 /**
- * Province seeds: [name, country, lon, lat, terrain, specialty?]
+ * Province seeds: [name, country, lon, lat, terrain, deposit?, doubled?]
  * Each country's FIRST seed is its capital (the name must match the country's capitalName).
  * terrain: P plains, F forest, H hills, M mountains, D desert.
+ * deposit: the one strategic resource (oil, steel, electronics, rare) the province produces. Every
+ * province produces money, food and manpower; strategic resources come ONLY from deposits.
+ * doubled: 2 = a double-resource region (the deposit produces twice as much).
+ * Fairness: big countries 10 provinces (6 deposits, 2 doubled), medium 8 (5 deposits, 1 doubled),
+ * AI-run countries 4 or fewer (1 doubled).
  */
 export const SEEDS = [
-  // United States
-  ['Washington','USA',-77,38.9,'P'],['Boston','USA',-71.3,42.4,'F'],['New York','USA',-75.5,42.8,'H'],['Pittsburgh','USA',-80,40.4,'H','steel'],
-  ['Carolinas','USA',-80,35.2,'H'],['Georgia','USA',-83.5,32.5,'F'],['Florida','USA',-81.5,28.2,'P'],['Chicago','USA',-88.5,41.7,'P','electronics'],
-  ['Louisiana','USA',-91.5,31,'P'],['Texas','USA',-98.5,31.5,'P','oil'],['Kansas City','USA',-96,39,'P','food'],['Dakotas','USA',-100.5,45.5,'P'],
-  ['Rockies','USA',-109,42,'M','rare'],['Seattle','USA',-121.5,46.5,'F'],['California','USA',-120.5,37,'H','electronics'],['Arizona','USA',-111.5,34,'D'],
-  // Mexico and Central America
-  ['Mexico City','MEX',-99.1,19.4,'H'],['Monterrey','MEX',-100.3,26,'D','oil'],['Chihuahua','MEX',-106,29,'D'],['Baja California','MEX',-114,29.5,'D'],
-  ['Guadalajara','MEX',-103.3,20.7,'H'],['Merida','MEX',-89.5,20.5,'F'],['Oaxaca','MEX',-96.7,17,'M'],['Guatemala','MEX',-90.5,15,'F'],
-  ['Panama','MEX',-80,8.7,'F'],
-  // Canada
-  ['Ottawa','CAN',-75.7,45.4,'F'],['Quebec','CAN',-71,48,'F'],['Halifax','CAN',-64.5,45.6,'F'],['Labrador','CAN',-63,54,'F'],
-  ['Northern Ontario','CAN',-85,50.5,'F'],['Winnipeg','CAN',-97,50.5,'P','food'],['Calgary','CAN',-113,52,'P','oil'],['Vancouver','CAN',-124,54.5,'M'],
-  ['Yukon','CAN',-132,63.5,'F'],['Yellowknife','CAN',-115,64,'F'],['Nunavut','CAN',-98,66.5,'H'],
-  // Brazil
-  ['Rio de Janeiro','BRA',-43.2,-22.5,'H'],['Sao Paulo','BRA',-47.5,-23.2,'H','steel'],['Minas Gerais','BRA',-44.5,-18,'H','rare'],['Bahia','BRA',-41.5,-12.5,'P'],
-  ['Pernambuco','BRA',-37.5,-8,'P','food'],['Ceara','BRA',-40,-5,'P'],['Para','BRA',-50,-3,'F'],['Manaus','BRA',-62,-4,'F'],
-  ['Acre','BRA',-69,-9,'F'],['Mato Grosso','BRA',-56,-14,'P'],['Goias','BRA',-50.5,-16,'P','food'],['Parana','BRA',-51.5,-25.5,'F'],['Rio Grande do Sul','BRA',-53.5,-30,'P'],
-  // Northern South America
-  ['Bogota','COL',-74,4.7,'M'],['Caracas','COL',-66,8,'P','oil'],['Quito','COL',-78.3,-1.2,'M'],['Lima','COL',-76,-11,'M'],['La Paz','COL',-65.5,-17,'M','rare'],['Georgetown','COL',-58.5,4.8,'F'],
-  // Southern Cone
-  ['Buenos Aires','ARG',-59.5,-35,'P','food'],['Cordoba','ARG',-64,-31.5,'P'],['Mendoza','ARG',-68.5,-33.5,'M'],['Northern Patagonia','ARG',-68,-40,'D'],
-  ['Southern Patagonia','ARG',-69,-49,'D'],['Chaco','ARG',-60,-26.5,'F'],['Asuncion','ARG',-57,-23.5,'F'],['Santiago','ARG',-71,-33,'M'],['Antofagasta','ARG',-69.5,-23.5,'D','rare'],
-  // United Kingdom
-  ['London','GBR',-0.4,51.5,'P'],['Manchester','GBR',-2.5,53.5,'H','steel'],['Scotland','GBR',-4.2,57,'M'],['Wales','GBR',-3.6,52.2,'H'],['Dublin','GBR',-7.8,53.2,'P'],
-  // France and the Low Countries
-  ['Paris','FRA',2.4,48.8,'P'],['Brittany','FRA',-2.8,48.1,'F'],['Bordeaux','FRA',-0.3,44.6,'P','food'],['Marseille','FRA',5,43.8,'P'],['Lyon','FRA',5.2,45.6,'M'],['Strasbourg','FRA',7.2,48.4,'F'],['Lille','FRA',3,50.4,'P','steel'],
-  ['Amsterdam','NLD',5,52.3,'P'],['Brussels','NLD',4.5,50.7,'P'],
-  // Iberia
-  ['Madrid','ESP',-3.7,40.4,'H'],['Barcelona','ESP',1.8,41.6,'H'],['Seville','ESP',-5.5,37.5,'H'],['Galicia','ESP',-7.8,42.6,'F'],['Lisbon','ESP',-8.3,39.3,'P'],
-  // Germany, Central Europe, Italy
-  ['Berlin','GER',13.4,52.4,'P'],['Hamburg','GER',10,53.5,'P'],['Ruhr','GER',7.2,51.5,'P','steel'],['Munich','GER',11.5,48.4,'H'],['Dresden','GER',13.5,51,'H'],['Frankfurt','GER',8.7,50,'F'],
-  ['Vienna','CEN',16.3,48.2,'H'],['Prague','CEN',14.4,50,'H'],['Budapest','CEN',19,47.4,'P','food'],
-  ['Rome','ITA',12.4,42,'H'],['Milan','ITA',9.3,45.3,'P','electronics'],['Venice','ITA',12.2,45.6,'P'],['Naples','ITA',15,40.9,'H'],
-  // Poland and the Balkans
-  ['Warsaw','POL',21,52.2,'P'],['Krakow','POL',19.9,50.1,'H','steel'],['Gdansk','POL',18.6,54.2,'P'],['Poznan','POL',16.9,52.4,'P'],
-  ['Belgrade','BAL',20.5,44.8,'P'],['Bucharest','BAL',26,44.6,'P','oil'],['Sofia','BAL',23.3,42.6,'M'],['Athens','BAL',23.7,38.1,'H'],['Zagreb','BAL',16,45.6,'H'],
-  // Scandinavia
-  ['Stockholm','SWE',18,59.3,'F'],['Gothenburg','SWE',12.8,57.8,'F'],['Norrland','SWE',17,64,'F'],['Oslo','SWE',10.5,60.3,'F'],['Bergen','SWE',6.5,61.3,'M'],['Tromso','SWE',19,69,'M'],
-  ['Helsinki','SWE',25,60.8,'F'],['Oulu','SWE',26.5,65,'F'],['Denmark','SWE',9.3,56.2,'P'],
-  // Soviet Union
-  ['Moscow','SOV',37.6,55.8,'P'],['Leningrad','SOV',30.5,59.8,'F'],['Tallinn','SOV',25.2,58.8,'F'],['Archangel','SOV',41,63.5,'F'],['Vorkuta','SOV',62,66.5,'F','oil'],
-  ['Minsk','SOV',27.6,53.8,'F'],['Kiev','SOV',30.5,50.4,'P','food'],['Kharkov','SOV',36.3,49.8,'P','steel'],['Odessa','SOV',31,46.7,'P'],['Lviv','SOV',24,49.8,'H'],
-  ['Riga','SOV',24.5,57,'F'],['Rostov','SOV',40,47.2,'P'],['Stalingrad','SOV',44.5,49,'P'],['Tbilisi','SOV',44.8,41.7,'M'],['Baku','SOV',48.5,40.5,'D','oil'],
-  ['Kazan','SOV',49.2,55.8,'F'],['Sverdlovsk','SOV',60.6,56.8,'H','steel'],['Omsk','SOV',73,55,'P','food'],['Alma-Ata','SOV',77,43.5,'M'],['Tashkent','SOV',68.5,41,'D'],
-  ['Ashgabat','SOV',58,38.5,'D'],['Aktobe','SOV',58,49,'D'],['Novosibirsk','SOV',83,55,'P'],['Krasnoyarsk','SOV',93,57,'F'],['Irkutsk','SOV',104,53,'F'],
-  ['Yakutsk','SOV',130,62,'F'],['Khabarovsk','SOV',135,49,'F'],['Vladivostok','SOV',131.5,44.2,'F'],['Kamchatka','SOV',158,56,'M'],['Magadan','SOV',150,61,'M'],['Taymyr','SOV',90,71,'H'],
-  // Turkey, Iran, Levant and Arabia
-  ['Ankara','TUR',32.9,39.9,'H'],['Istanbul','TUR',28.6,41.1,'P'],['Izmir','TUR',27.3,38.5,'H'],['Adana','TUR',35.3,37.1,'P'],['Erzurum','TUR',41.3,39.9,'M'],
-  ['Tehran','IRN',51.4,35.7,'M'],['Tabriz','IRN',46.3,38.1,'M'],['Isfahan','IRN',52,32.6,'D'],['Ahvaz','IRN',48.8,31.3,'P','oil'],['Mashhad','IRN',59.6,36.3,'M'],['Zahedan','IRN',60.8,29.5,'D'],
-  ['Baghdad','MES',44.4,33.3,'D','oil'],['Mosul','MES',43.1,36.3,'H','oil'],['Damascus','MES',36.3,33.5,'D'],['Jerusalem','MES',35.2,31.8,'H'],
-  ['Riyadh','SAU',46.7,24.7,'D'],['Mecca','SAU',40,21.5,'D'],['Tabuk','SAU',37.5,28.5,'D'],['Empty Quarter','SAU',51,20,'D'],['Sanaa','SAU',44.2,15.4,'M'],['Muscat','SAU',58,23,'M'],['Dammam','SAU',49.8,26.4,'D','oil'],
-  // Africa
-  ['Cairo','EGY',31.3,30,'D'],['Alexandria','EGY',29.9,31.1,'P'],['Aswan','EGY',32.7,24.5,'D'],['Sinai','EGY',33.8,29.3,'D'],['Western Desert','EGY',26,27,'D'],
-  ['Khartoum','ETH',32.6,15.6,'D'],['Addis Ababa','ETH',38.7,9,'M'],['Mogadishu','ETH',46,3,'D'],['Nairobi','ETH',36.8,-1.3,'P'],
-  ['Rabat','MAR',-6.8,34,'P'],['Algiers','MAR',3,36.5,'H'],['Tunis','MAR',10,36.5,'P'],['Tripoli','MAR',13.2,32.7,'D'],['Benghazi','MAR',20.5,32.2,'D'],['Sahara','MAR',5,25,'D','oil'],
-  ['Lagos','NGA',3.5,6.5,'F'],['Kano','NGA',8.5,12,'P'],['Dakar','NGA',-15.5,14.5,'P'],['Accra','NGA',-0.5,6,'F'],['Timbuktu','NGA',-3,17,'D'],['Ndjamena','NGA',15,12.5,'D'],['Yaounde','NGA',11.5,4,'F'],
-  ['Johannesburg','ZAF',28,-26,'H'],['Cape Town','ZAF',18.5,-33.5,'H'],['Windhoek','ZAF',17,-22.5,'D'],['Kalahari','ZAF',23,-23,'D'],['Lusaka','ZAF',28.3,-15.4,'P'],['Beira','ZAF',34,-19,'P'],
-  ['Luanda','ZAF',14,-9,'P'],['Kinshasa','ZAF',16,-4.5,'F'],['Lubumbashi','ZAF',27.5,-11.5,'H','rare'],
-  // China, Korea
-  ['Nanjing','CHN',118.8,32,'P'],['Beijing','CHN',116.4,40,'P'],['Harbin','CHN',126.6,46,'F'],['Shenyang','CHN',123.4,41.8,'P','steel'],['Jinan','CHN',117,36.5,'H'],
-  ['Zhengzhou','CHN',113.6,34.7,'P'],['Xian','CHN',108.9,34.3,'H'],['Wuhan','CHN',114.3,30.6,'P','steel'],['Changsha','CHN',113,28.2,'H'],['Guangzhou','CHN',113.3,23.1,'H'],
-  ['Fuzhou','CHN',119.3,26,'H'],['Chongqing','CHN',106.5,29.6,'H'],['Chengdu','CHN',104,30.7,'P','food'],['Kunming','CHN',102.7,25,'M'],['Lanzhou','CHN',103.8,36,'H'],
-  ['Urumqi','CHN',87.6,43.8,'D','oil'],['Lhasa','CHN',91,29.7,'M'],['Hohhot','CHN',111.7,40.8,'D'],['Ulaanbaatar','CHN',106.9,47.9,'H'],
-  ['Seoul','KOR',127,37.5,'H'],['Pyongyang','KOR',125.7,39.2,'H'],['Busan','KOR',128.8,35.5,'H'],
-  // South and Southeast Asia
-  ['Delhi','IND',77.2,28.6,'P'],['Mumbai','IND',73,19.5,'H'],['Calcutta','IND',88.4,22.8,'P'],['Madras','IND',80,13.3,'P'],['Hyderabad','IND',78.5,17.4,'H'],['Nagpur','IND',79,21.2,'P'],
-  ['Ahmedabad','IND',72.6,23,'D'],['Lucknow','IND',81,26.8,'P'],['Patna','IND',85.1,25.6,'P'],['Guwahati','IND',91.8,26.2,'F'],['Bangalore','IND',76.7,12,'F'],
-  ['Karachi','PAK',67,25.2,'D'],['Lahore','PAK',74,31.5,'P'],['Quetta','PAK',66.5,30.2,'M'],['Peshawar','PAK',71.4,33.9,'M'],['Kabul','PAK',68.5,34.8,'M'],
-  ['Rangoon','SEA',96.2,16.8,'F'],['Mandalay','SEA',96,22,'F'],['Bangkok','SEA',100.5,14,'P','food'],['Hanoi','SEA',105.8,21.2,'P'],['Saigon','SEA',106.5,11,'P'],['Kuala Lumpur','SEA',101.7,3.5,'F','rare'],['Vientiane','SEA',102.6,18.2,'F'],
-  // Japan
-  ['Tokyo','JPN',139.7,35.8,'P','electronics'],['Osaka','JPN',135.5,34.8,'P'],['Sapporo','JPN',142,43.2,'F'],['Fukuoka','JPN',130.8,33.2,'H'],['Sendai','JPN',140.8,38.5,'H'],
+  // ---- Big: United States
+  ['Washington','USA',-77,38.9,'P'],['New York','USA',-75.5,42.8,'H'],['Pittsburgh','USA',-80,40.4,'H','steel',2],['Georgia','USA',-83.5,32.5,'F','steel'],
+  ['Chicago','USA',-88.5,41.7,'P','electronics'],['Texas','USA',-98.5,31.5,'P','oil',2],['Kansas City','USA',-96,39,'P'],['Rockies','USA',-109,42,'M','rare'],
+  ['California','USA',-120.5,37,'H','oil'],['Seattle','USA',-121.5,46.5,'F'],
+  // ---- Big: Soviet Union
+  ['Moscow','SOV',37.6,55.8,'P'],['Leningrad','SOV',30.5,59.8,'F'],['Kiev','SOV',30.5,50.4,'P'],['Kharkov','SOV',36.3,49.8,'P','steel'],
+  ['Baku','SOV',48.5,40.5,'D','oil',2],['Sverdlovsk','SOV',60.6,56.8,'H','steel',2],['Tashkent','SOV',68.5,41,'D','rare'],['Novosibirsk','SOV',83,55,'P','electronics'],
+  ['Vorkuta','SOV',62,66.5,'F','oil'],['Khabarovsk','SOV',135,49,'F'],
+  // ---- Big: China
+  ['Nanjing','CHN',118.8,32,'P'],['Beijing','CHN',116.4,40,'P','electronics'],['Harbin','CHN',126.6,46,'F','oil'],['Shenyang','CHN',123.4,41.8,'P','steel',2],
+  ['Wuhan','CHN',114.3,30.6,'P','steel'],['Guangzhou','CHN',113.3,23.1,'H'],['Chongqing','CHN',106.5,29.6,'H'],['Xian','CHN',108.9,34.3,'H'],
+  ['Urumqi','CHN',87.6,43.8,'D','oil',2],['Hohhot','CHN',111.7,40.8,'D','rare'],
+  // ---- Big: India
+  ['Delhi','IND',77.2,28.6,'P'],['Mumbai','IND',73,19.5,'H','oil',2],['Calcutta','IND',88.4,22.8,'P'],['Madras','IND',80,13.3,'P'],
+  ['Bangalore','IND',76.7,12,'F','electronics'],['Nagpur','IND',79,21.2,'P','steel'],['Patna','IND',85.1,25.6,'P','steel',2],['Guwahati','IND',91.8,26.2,'F','oil'],
+  ['Hyderabad','IND',78.5,17.4,'H','rare'],['Ahmedabad','IND',72.6,23,'D'],
+  // ---- Big: Brazil
+  ['Rio de Janeiro','BRA',-43.2,-22.5,'H','oil',2],['Sao Paulo','BRA',-47.5,-23.2,'H','electronics'],['Minas Gerais','BRA',-44.5,-18,'H','steel',2],['Bahia','BRA',-41.5,-12.5,'P','oil'],
+  ['Pernambuco','BRA',-37.5,-8,'P'],['Para','BRA',-50,-3,'F','rare'],['Manaus','BRA',-62,-4,'F'],['Mato Grosso','BRA',-56,-14,'P'],
+  ['Goias','BRA',-50.5,-16,'P'],['Rio Grande do Sul','BRA',-53.5,-30,'P','steel'],
+  // ---- Medium: United Kingdom
+  ['London','GBR',-0.4,51.5,'P'],['Manchester','GBR',-2.5,53.5,'H','steel',2],['Scotland','GBR',-4.2,57,'M','oil'],['Wales','GBR',-3.6,52.2,'H','steel'],
+  ['Birmingham','GBR',-1.9,52.5,'P','electronics'],['Devon','GBR',-3.7,50.9,'H','rare'],['Newcastle','GBR',-1.6,55,'H'],['Dublin','GBR',-7.8,53.2,'P'],
+  // ---- Medium: France
+  ['Paris','FRA',2.4,48.8,'P'],['Lille','FRA',3,50.4,'P','steel',2],['Brittany','FRA',-2.8,48.1,'F'],['Bordeaux','FRA',-0.3,44.6,'P','oil'],
+  ['Marseille','FRA',5,43.8,'P','rare'],['Lyon','FRA',5.2,45.6,'M'],['Strasbourg','FRA',7.2,48.4,'F','steel'],['Toulouse','FRA',1.4,43.6,'P','electronics'],
+  // ---- Medium: Turkey
+  ['Ankara','TUR',32.9,39.9,'H'],['Istanbul','TUR',28.6,41.1,'P','electronics'],['Izmir','TUR',27.3,38.5,'H'],['Adana','TUR',35.3,37.1,'P'],
+  ['Erzurum','TUR',41.3,39.9,'M','rare'],['Zonguldak','TUR',31.8,41.4,'F','steel',2],['Diyarbakir','TUR',40.2,37.9,'H','oil'],['Konya','TUR',32.5,37.9,'P','steel'],
+  // ---- AI-run countries (4 or fewer provinces, one doubled each)
+  ['Mexico City','MEX',-99.1,19.4,'H'],['Monterrey','MEX',-100.3,26,'D','oil',2],['Chihuahua','MEX',-106,29,'D','steel'],['Guatemala','MEX',-90.5,15,'F','rare'],
+  ['Ottawa','CAN',-75.7,45.4,'F'],['Calgary','CAN',-113,52,'P','oil',2],['Vancouver','CAN',-124,54.5,'M','steel'],['Yellowknife','CAN',-115,64,'F','rare'],
+  ['Bogota','COL',-74,4.7,'M'],['Caracas','COL',-66,8,'P','oil',2],['Lima','COL',-76,-11,'M','steel'],['La Paz','COL',-65.5,-17,'M','rare'],
+  ['Buenos Aires','ARG',-59.5,-35,'P'],['Santiago','ARG',-71,-33,'M','rare',2],['Northern Patagonia','ARG',-68,-40,'D','oil'],['Asuncion','ARG',-57,-23.5,'F'],
+  ['Amsterdam','NLD',5,52.3,'P','electronics'],['Brussels','NLD',4.5,50.7,'P','steel',2],
+  ['Madrid','ESP',-3.7,40.4,'H'],['Barcelona','ESP',1.8,41.6,'H','electronics'],['Seville','ESP',-5.5,37.5,'H','rare',2],['Galicia','ESP',-7.8,42.6,'F','steel'],
+  ['Berlin','GER',13.4,52.4,'P'],['Hamburg','GER',10,53.5,'P','oil'],['Ruhr','GER',7.2,51.5,'P','steel',2],['Munich','GER',11.5,48.4,'H','electronics'],
+  ['Vienna','CEN',16.3,48.2,'H','oil'],['Prague','CEN',14.4,50,'H','steel'],['Budapest','CEN',19,47.4,'P','rare',2],
+  ['Rome','ITA',12.4,42,'H'],['Milan','ITA',9.3,45.3,'P','electronics',2],['Naples','ITA',15,40.9,'H','steel'],['Venice','ITA',12.2,45.6,'P','oil'],
+  ['Warsaw','POL',21,52.2,'P'],['Krakow','POL',19.9,50.1,'H','steel',2],['Gdansk','POL',18.6,54.2,'P','oil'],['Poznan','POL',16.9,52.4,'P','rare'],
+  ['Belgrade','BAL',20.5,44.8,'P','steel'],['Bucharest','BAL',26,44.6,'P','oil',2],['Sofia','BAL',23.3,42.6,'M','rare'],['Athens','BAL',23.7,38.1,'H'],
+  ['Stockholm','SWE',18,59.3,'F'],['Oslo','SWE',10.5,60.3,'F','oil',2],['Norrland','SWE',17,64,'F','steel'],['Helsinki','SWE',25,60.8,'F','electronics'],
+  ['Tehran','IRN',51.4,35.7,'M'],['Ahvaz','IRN',48.8,31.3,'P','oil',2],['Mashhad','IRN',59.6,36.3,'M','rare'],['Isfahan','IRN',52,32.6,'D','steel'],
+  ['Baghdad','MES',44.4,33.3,'D','oil',2],['Mosul','MES',43.1,36.3,'H'],['Damascus','MES',36.3,33.5,'D','steel'],['Jerusalem','MES',35.2,31.8,'H','electronics'],
+  ['Riyadh','SAU',46.7,24.7,'D','oil'],['Dammam','SAU',49.8,26.4,'D','oil',2],['Mecca','SAU',40,21.5,'D'],['Sanaa','SAU',44.2,15.4,'M'],
+  ['Cairo','EGY',31.3,30,'D'],['Alexandria','EGY',29.9,31.1,'P','electronics'],['Aswan','EGY',32.7,24.5,'D','steel'],['Sinai','EGY',33.8,29.3,'D','oil',2],
+  ['Khartoum','ETH',32.6,15.6,'D','oil'],['Addis Ababa','ETH',38.7,9,'M','rare',2],['Mogadishu','ETH',46,3,'D'],['Nairobi','ETH',36.8,-1.3,'P','steel'],
+  ['Rabat','MAR',-6.8,34,'P','rare'],['Algiers','MAR',3,36.5,'H','steel'],['Tripoli','MAR',13.2,32.7,'D'],['Sahara','MAR',5,25,'D','oil',2],
+  ['Lagos','NGA',3.5,6.5,'F','oil',2],['Kano','NGA',8.5,12,'P','steel'],['Dakar','NGA',-15.5,14.5,'P'],['Accra','NGA',-0.5,6,'F','rare'],
+  ['Johannesburg','ZAF',28,-26,'H','steel'],['Cape Town','ZAF',18.5,-33.5,'H'],['Lubumbashi','ZAF',27.5,-11.5,'H','rare',2],['Luanda','ZAF',14,-9,'P','oil'],
+  ['Seoul','KOR',127,37.5,'H'],['Pyongyang','KOR',125.7,39.2,'H','steel',2],['Busan','KOR',128.8,35.5,'H','electronics'],
+  ['Karachi','PAK',67,25.2,'D'],['Lahore','PAK',74,31.5,'P'],['Quetta','PAK',66.5,30.2,'M','oil',2],['Kabul','PAK',68.5,34.8,'M','rare'],
+  ['Rangoon','SEA',96.2,16.8,'F','oil'],['Bangkok','SEA',100.5,14,'P'],['Hanoi','SEA',105.8,21.2,'P','steel'],['Kuala Lumpur','SEA',101.7,3.5,'F','rare',2],
+  ['Tokyo','JPN',139.7,35.8,'P','electronics',2],['Osaka','JPN',135.5,34.8,'P','steel'],['Sapporo','JPN',142,43.2,'F'],['Fukuoka','JPN',130.8,33.2,'H'],
 ];
 
 /** Sea crossings that count as land borders (names of two provinces). */
 export const BRIDGES = [
   ['London','Lille'],['Dublin','Wales'],['Dublin','Scotland'],['Seville','Rabat'],
-  ['Denmark','Gothenburg'],['Fukuoka','Busan'],['Sapporo','Sendai'],['Sinai','Jerusalem'],['Fukuoka','Osaka'],
-  // Long sea lanes between the continents. Armies cross them slowly until the navy arrives (week 8).
-  ['New York','London'],['Halifax','Dublin'],['Rio de Janeiro','Lagos'],['California','Tokyo'],['Vancouver','Kamchatka'],
+  ['Hamburg','Stockholm'],['Fukuoka','Busan'],['Sapporo','Tokyo'],['Sinai','Jerusalem'],['Fukuoka','Osaka'],
+  // Long sea lanes between the continents. Armies cross them slowly; ships sail them.
+  ['New York','London'],['Ottawa','Dublin'],['Rio de Janeiro','Lagos'],['California','Tokyo'],['Vancouver','Khabarovsk'],
 ];

@@ -82,8 +82,8 @@ for (let s = 0; s < W * H; s++) {
 }
 
 // ---------- seeds ----------
-const seeds = SEEDS.map(([name, code, lon, lat, terrain, specialty], idx) => ({
-  idx, name, code, lon, lat, terrain, specialty,
+const seeds = SEEDS.map(([name, code, lon, lat, terrain, deposit, dbl], idx) => ({
+  idx, name, code, lon, lat, terrain, deposit, doubled: dbl === 2,
   x: mx(lon), y: my(lat),
   comp: (() => {
     const i = Math.floor((lon - LON0) / CELL), j = Math.floor((LAT1 - lat) / CELL);
@@ -388,7 +388,8 @@ const rows = seeds.map((s) => ({
   name: s.name,
   countryCode: s.code,
   terrain: { P: 'plains', F: 'forest', H: 'hills', M: 'mountains', D: 'desert' }[s.terrain],
-  specialty: s.specialty,
+  deposit: s.deposit,
+  doubled: s.doubled || undefined,
   isCapital: seeds.find((x) => x.code === s.code).idx === s.idx,
   isCoastal: coastal.has(s.idx),
   center: centers.get(s.idx).map(round),
@@ -415,7 +416,10 @@ export interface GeneratedProvince {
   name: string;
   countryCode: string;
   terrain: 'plains' | 'forest' | 'hills' | 'mountains' | 'desert';
-  specialty?: 'money' | 'food' | 'oil' | 'steel' | 'electronics' | 'rare' | 'manpower';
+  /** The strategic resource this province produces (only provinces with a deposit produce one). */
+  deposit?: 'oil' | 'steel' | 'electronics' | 'rare';
+  /** A double-resource region: the deposit produces twice as much. */
+  doubled?: boolean;
   isCapital: boolean;
   isCoastal: boolean;
   center: [number, number];

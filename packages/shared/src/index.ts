@@ -13,3 +13,5 @@ export * from './combat';
 export * from './research';
 export * from './generals';
 export * from './diplomacy';
+export * from './air';
+export * from './ai-war';
