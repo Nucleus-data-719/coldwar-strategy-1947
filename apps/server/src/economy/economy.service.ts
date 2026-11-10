@@ -14,6 +14,7 @@ import {
 } from '@cw/shared';
 import { env } from '../config/env';
 import { DB, Db, DbOrTx } from '../db/db.module';
+import { loadResearch } from '../research/research.queries';
 import { buildings, countries, CountryRow, formationUnits, formations, provinces } from '../db/schema';
 
 export function rowToResources(row: CountryRow): Resources {
@@ -64,6 +65,10 @@ export class EconomyService {
         total = addResources(total, provinceProduction(p.production, byProvince.get(p.id) ?? []));
       }
     }
+
+    // Research: industry techs raise everything the country produces.
+    const bonus = (await loadResearch(db, countryId)).summary.productionPercent;
+    if (bonus > 0) for (const k of Object.keys(total) as ResourceKey[]) total[k] *= 1 + bonus / 100;
 
     const units = await db
       .select({ unitType: formationUnits.unitType, count: formationUnits.count })

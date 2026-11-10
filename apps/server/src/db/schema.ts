@@ -239,6 +239,72 @@ export const productionOrders = pgTable(
   ],
 );
 
+export const feedback = pgTable(
+  'feedback',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    campaignId: uuid('campaign_id').references(() => campaigns.id, { onDelete: 'set null' }),
+    message: text('message').notNull(),
+    context: jsonb('context').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('feedback_created_idx').on(t.createdAt)],
+);
+
+export const research = pgTable(
+  'research',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    countryId: uuid('country_id')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    techId: text('tech_id').notNull(),
+    status: text('status').$type<'active' | 'done'>().notNull(),
+    startedAt: ts('started_at').notNull().defaultNow(),
+    completesAt: ts('completes_at').notNull(),
+  },
+  (t) => [
+    uniqueIndex('research_country_tech_idx').on(t.countryId, t.techId),
+    index('research_due_idx').on(t.status, t.completesAt),
+  ],
+);
+
+export const generals = pgTable(
+  'generals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    countryId: uuid('country_id')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    generalId: text('general_id').notNull(),
+    unlocked: boolean('unlocked').notNull().default(false),
+    fragments: integer('fragments').notNull().default(0),
+    xp: integer('xp').notNull().default(0),
+    deployedFormationId: uuid('deployed_formation_id').references(() => formations.id, { onDelete: 'set null' }),
+    lockedUntil: ts('locked_until'),
+    abilityActiveUntil: ts('ability_active_until'),
+    abilityReadyAt: ts('ability_ready_at'),
+  },
+  (t) => [
+    uniqueIndex('generals_country_general_idx').on(t.countryId, t.generalId),
+    uniqueIndex('generals_deployed_idx').on(t.deployedFormationId),
+  ],
+);
+
+export const generalClaims = pgTable('general_claims', {
+  countryId: uuid('country_id')
+    .primaryKey()
+    .references(() => countries.id, { onDelete: 'cascade' }),
+  lastClaimAt: ts('last_claim_at').notNull(),
+});
+
 export const wars = pgTable(
   'wars',
   {
@@ -296,3 +362,5 @@ export type NotificationRow = typeof notifications.$inferSelect;
 export type WarRow = typeof wars.$inferSelect;
 export type BattleReportRow = typeof battleReports.$inferSelect;
 export type ProductionOrderRow = typeof productionOrders.$inferSelect;
+export type ResearchRow = typeof research.$inferSelect;
+export type GeneralRow = typeof generals.$inferSelect;

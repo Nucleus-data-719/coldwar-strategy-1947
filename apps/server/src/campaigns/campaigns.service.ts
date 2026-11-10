@@ -1,5 +1,5 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   BUILDINGS,
   COUNTRIES,
@@ -38,6 +38,8 @@ import { EconomyService } from '../economy/economy.service';
 import { toFormationDto } from '../military/formation.mapper';
 import { PlayersService } from '../players/players.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { generals } from '../db/schema';
+import { loadResearch, toResearchDto } from '../research/research.queries';
 import { ProductionService } from '../production/production.service';
 import { WarsService } from '../wars/wars.service';
 
@@ -68,10 +70,25 @@ export class CampaignsService implements OnModuleInit {
     private readonly production: ProductionService,
   ) {}
 
-  /** Makes sure there is always a campaign to join on a fresh database. */
+  /** Campaigns made before the real world map (province keys like p0_0) cannot be played any more. */
+  private async legacyCampaignIds(): Promise<Set<string>> {
+    const rows = await this.db
+      .selectDistinct({ id: provinces.campaignId })
+      .from(provinces)
+      .where(sql`${provinces.key} ~ '^p[0-9]+_[0-9]+$'`);
+    return new Set(rows.map((r) => r.id));
+  }
+
+  /** Makes sure there is always a playable campaign to join on a fresh database. */
   async onModuleInit() {
     try {
-      const existing = await this.db.select({ id: campaigns.id }).from(campaigns).limit(1);
+      const legacy = await this.legacyCampaignIds();
+      if (legacy.size > 0) {
+        this.log.warn(
+          `${legacy.size} campaign(s) use the old placeholder map and are hidden. Delete them with: DELETE FROM campaigns WHERE id IN (...) (see docs/week4.sql).`,
+        );
+      }
+      const existing = (await this.db.select({ id: campaigns.id }).from(campaigns)).filter((c) => !legacy.has(c.id));
       if (existing.length === 0) {
         const c = await this.createCampaign('Classic Cold War 1947');
         this.log.log(`Created default campaign "${c.name}"`);
@@ -185,7 +202,8 @@ export class CampaignsService implements OnModuleInit {
   }
 
   async list(userId: string): Promise<CampaignSummary[]> {
-    const rows = await this.db.select().from(campaigns).orderBy(campaigns.createdAt);
+    const legacy = await this.legacyCampaignIds();
+    const rows = (await this.db.select().from(campaigns).orderBy(campaigns.createdAt)).filter((c) => !legacy.has(c.id));
     const ps = await this.db
       .select({ campaignId: players.campaignId, userId: players.userId, countryId: players.countryId })
       .from(players);
@@ -328,6 +346,13 @@ export class CampaignsService implements OnModuleInit {
       ),
     );
 
+    const leaders = await this.db
+      .select({ f: generals.deployedFormationId, g: generals.generalId })
+      .from(generals)
+      .where(eq(generals.countryId, player.countryId));
+    const generalOf = new Map(leaders.filter((l) => l.f).map((l) => [l.f as string, l.g]));
+    for (const dto of myFormationDtos) dto.generalId = generalOf.get(dto.id) ?? null;
+
     const resources = await this.economy.getLive(player.countryId);
 
     return {
@@ -342,6 +367,7 @@ export class CampaignsService implements OnModuleInit {
         const key = me?.capitalMoveProvinceId ? keyById.get(me.capitalMoveProvinceId) : undefined;
         return key && me?.capitalMoveAt ? { provinceKey: key, completesAt: me.capitalMoveAt.toISOString() } : null;
       })(),
+      research: toResearchDto(await loadResearch(this.db, player.countryId)),
       resources,
       serverTime: new Date().toISOString(),
     };

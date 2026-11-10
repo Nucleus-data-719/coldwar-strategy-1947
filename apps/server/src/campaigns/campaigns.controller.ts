@@ -16,6 +16,8 @@ import { AuthUser, CurrentUser } from '../common/current-user.decorator';
 import { parse } from '../common/zod';
 import { env } from '../config/env';
 import { BuildingsService } from '../buildings/buildings.service';
+import { GeneralsService } from '../generals/generals.service';
+import { ResearchService } from '../research/research.service';
 import { CapitalService } from '../capital/capital.service';
 import { FormationsService } from '../military/formations.service';
 import { ProductionService } from '../production/production.service';
@@ -33,6 +35,8 @@ const produceSchema = z.object({ unitType: z.enum(UNIT_TYPES), quantity: z.numbe
 const mergeSchema = z.object({ intoId: z.string().uuid() });
 const splitSchema = z.object({ units: z.record(z.enum(UNIT_TYPES), z.number().int().min(0).max(100000)) });
 const capitalSchema = z.object({ provinceId: z.string().uuid() });
+const researchSchema = z.object({ techId: z.string().min(1).max(40) });
+const deploySchema = z.object({ formationId: z.string().uuid() });
 const warSchema = z.object({ countryId: z.string().uuid() });
 const moveSchema = z.object({
   provinceId: z.string().uuid(),
@@ -54,6 +58,8 @@ export class CampaignsController {
     private readonly production: ProductionService,
     private readonly formationsService: FormationsService,
     private readonly capital: CapitalService,
+    private readonly researchService: ResearchService,
+    private readonly generalsService: GeneralsService,
   ) {}
 
   @Get()
@@ -180,6 +186,54 @@ export class CampaignsController {
   moveCapital(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
     const { provinceId } = parse(capitalSchema, body);
     return this.capital.relocate(user.id, id, provinceId);
+  }
+
+  @Post(':id/research')
+  @HttpCode(200)
+  startResearch(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
+    const { techId } = parse(researchSchema, body);
+    return this.researchService.start(user.id, id, techId);
+  }
+
+  @Post(':id/research/cancel')
+  @HttpCode(200)
+  cancelResearch(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.researchService.cancel(user.id, id);
+  }
+
+  @Get(':id/generals')
+  listGenerals(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.generalsService.state(user.id, id);
+  }
+
+  @Post(':id/generals/dispatch')
+  @HttpCode(200)
+  claimDispatch(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.generalsService.dispatch(user.id, id);
+  }
+
+  @Post(':id/generals/:generalId/deploy')
+  @HttpCode(200)
+  deployGeneral(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('generalId') generalId: string,
+    @Body() body: unknown,
+  ) {
+    const { formationId } = parse(deploySchema, body);
+    return this.generalsService.deploy(user.id, id, generalId, formationId);
+  }
+
+  @Post(':id/generals/:generalId/undeploy')
+  @HttpCode(200)
+  undeployGeneral(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Param('generalId') generalId: string) {
+    return this.generalsService.undeploy(user.id, id, generalId);
+  }
+
+  @Post(':id/generals/:generalId/activate')
+  @HttpCode(200)
+  activateGeneral(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Param('generalId') generalId: string) {
+    return this.generalsService.activate(user.id, id, generalId);
   }
 
   @Get(':id/wars')

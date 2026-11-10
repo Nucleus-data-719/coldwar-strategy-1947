@@ -10,10 +10,48 @@ import {
   type StateProvince,
 } from '@cw/shared';
 
+export type MapMode = 'political' | 'resources' | 'terrain';
+
+export const TERRAIN_COLORS: Record<string, number> = {
+  plains: 0x93b565,
+  forest: 0x3f7a4a,
+  hills: 0xb0955a,
+  mountains: 0x8a8a96,
+  desert: 0xd8c27a,
+};
+
+/** Colour used for the strategic resource a province is best at, with a legend in the game page. */
+export const RESOURCE_COLORS: Record<string, number> = {
+  oil: 0x8b5a2b,
+  steel: 0x7a8ea3,
+  electronics: 0x4fc3f7,
+  rare: 0xc06be0,
+  food: 0x9acd32,
+  money: 0xf0c040,
+  manpower: 0xd9534f,
+};
+
+const RESOURCE_WEIGHT: Record<string, number> = { oil: 3, steel: 2.5, electronics: 8, rare: 10, food: 0.8, money: 1, manpower: 0.5 };
+
+export function dominantResource(key: string): string {
+  const prod = PROVINCE_BY_KEY[key].production as unknown as Record<string, number>;
+  let best = 'money';
+  let bestScore = -1;
+  for (const [k, w] of Object.entries(RESOURCE_WEIGHT)) {
+    const score = (prod[k] ?? 0) * w;
+    if (score > bestScore) {
+      bestScore = score;
+      best = k;
+    }
+  }
+  return best;
+}
+
 interface Props {
   provinces: StateProvince[];
   countries: StateCountry[];
   myCountryId: string;
+  mode: MapMode;
   /** Countries you are at war with: their provinces get a red outline. */
   atWarWith: string[];
   selectedKey: string | null;
@@ -29,6 +67,7 @@ interface Props {
 interface Shape {
   g: Graphics;
   label: Text;
+  nameLabel: Text;
 }
 
 interface Ctx {
@@ -46,6 +85,7 @@ export function WorldMap({
   provinces,
   countries,
   myCountryId,
+  mode,
   atWarWith,
   selectedKey,
   onSelect,
@@ -112,7 +152,7 @@ export function WorldMap({
             if (!dragMoved.current) onSelectRef.current(geo.key);
           });
           world.addChild(g);
-          shapes.set(geo.key, { g, label: null as unknown as Text });
+          shapes.set(geo.key, { g, label: null as unknown as Text, nameLabel: null as unknown as Text });
         }
         // Labels are added after all shapes so neighbours never paint over them.
         for (const geo of PROVINCES) {
@@ -130,7 +170,34 @@ export function WorldMap({
           label.eventMode = 'none';
           world.addChild(label);
           shapes.get(geo.key)!.label = label;
+
+          const nameLabel = new Text({
+            text: geo.name,
+            style: { fontSize: 11, fill: 0xe8eef5, fontFamily: 'sans-serif', stroke: { color: 0x000000, width: 3 } },
+          });
+          nameLabel.anchor.set(0.5, 0);
+          nameLabel.position.set(geo.center.x, geo.center.y + 8);
+          nameLabel.eventMode = 'none';
+          nameLabel.visible = false;
+          world.addChild(nameLabel);
+          shapes.get(geo.key)!.nameLabel = nameLabel;
         }
+
+        // Keep labels a readable size at every zoom, and only show detail when zoomed in.
+        let lastScale = -1;
+        const syncLabels = () => {
+          const sc = world.scale.x;
+          if (sc === lastScale) return;
+          lastScale = sc;
+          for (const { label, nameLabel } of shapes.values()) {
+            label.visible = sc >= 0.7;
+            label.scale.set(0.9 / sc);
+            nameLabel.visible = sc >= 1.5;
+            nameLabel.scale.set(0.85 / sc);
+            nameLabel.position.y = label.position.y + 7 / sc;
+          }
+        };
+        app.ticker.add(syncLabels);
 
         // Army layer: route preview, travelling markers. Redrawn every frame from server times.
         const armyLayer = new Container();
@@ -251,6 +318,7 @@ export function WorldMap({
           shapes,
           dispose: () => {
             app.ticker.remove(drawArmies);
+            app.ticker.remove(syncLabels);
             canvas.removeEventListener('pointerdown', down);
             window.removeEventListener('pointermove', move);
             window.removeEventListener('pointerup', up);
@@ -292,7 +360,15 @@ export function WorldMap({
       shape.g.clear();
       shape.g
         .poly(geo.polygon)
-        .fill({ color: colorById.get(st.ownerCountryId) ?? 0x555555, alpha: mine ? 0.95 : 0.7 })
+        .fill({
+          color:
+            mode === 'terrain'
+              ? (TERRAIN_COLORS[geo.terrain] ?? 0x555555)
+              : mode === 'resources'
+                ? (RESOURCE_COLORS[dominantResource(geo.key)] ?? 0x555555)
+                : (colorById.get(st.ownerCountryId) ?? 0x555555),
+          alpha: mode === 'political' ? (mine ? 0.95 : 0.7) : mine ? 0.95 : 0.85,
+        })
         .stroke({
           width: selected ? 4 : mine ? 2 : enemy ? 2 : 1,
           color: selected ? 0xffffff : mine ? 0xffe27a : enemy ? 0xe5483f : 0x0b1d2e,
@@ -307,7 +383,7 @@ export function WorldMap({
       if (building > 0) parts.push(`⏳${building}`);
       shape.label.text = parts.join(' ');
     }
-  }, [ready, provinces, countries, myCountryId, atWarWith, selectedKey]);
+  }, [ready, provinces, countries, myCountryId, mode, atWarWith, selectedKey]);
 
   return <div ref={hostRef} className="map-host" />;
 }

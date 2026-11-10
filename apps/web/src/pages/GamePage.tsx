@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { getSocket } from '../services/socket';
-import { WorldMap } from '../features/world-map/WorldMap';
+import { RESOURCE_COLORS, TERRAIN_COLORS, WorldMap, type MapMode } from '../features/world-map/WorldMap';
 import { ResourceBar, useProjectedBalance } from '../features/economy/ResourceBar';
 import { ProvincePanel } from '../features/economy/ProvincePanel';
 import { EconomyPanel } from '../features/economy/EconomyPanel';
@@ -10,6 +10,9 @@ import { NotificationsPanel } from '../features/economy/NotificationsPanel';
 import { ArmiesPanel } from '../features/military/ArmiesPanel';
 import { MovePanel } from '../features/military/MovePanel';
 import { BattlesPanel } from '../features/military/BattlesPanel';
+import { FeedbackButton } from '../features/feedback/FeedbackButton';
+import { ResearchPanel } from '../features/research/ResearchPanel';
+import { GeneralsPanel } from '../features/generals/GeneralsPanel';
 import { WarsPanel } from '../features/diplomacy/WarsPanel';
 
 type Tab = 'world' | 'research' | 'economy' | 'generals' | 'diplomacy';
@@ -33,6 +36,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('world');
   const [selected, setSelected] = useState<string | null>(null);
+  const [mapMode, setMapMode] = useState<MapMode>('political');
 
   // Move mode: pick an army, then click a destination on the map.
   const [moveFormationId, setMoveFormationId] = useState<string | null>(null);
@@ -56,6 +60,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
         qc.invalidateQueries({ queryKey: ['province', campaignId] });
         qc.invalidateQueries({ queryKey: ['battles', campaignId] });
         qc.invalidateQueries({ queryKey: ['wars', campaignId] });
+        qc.invalidateQueries({ queryKey: ['generals', campaignId] });
       }, 200);
     };
     const onNotification = () => qc.invalidateQueries({ queryKey: ['notifications', campaignId] });
@@ -132,6 +137,10 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
           {state.campaign.gameSpeed !== 1 ? ` · speed x${state.campaign.gameSpeed}` : ''}
         </span>
         <span className="spacer" />
+        <FeedbackButton
+          campaignId={campaignId}
+          details={{ tab, selected, mapMode, country: myCountry?.code, stateAt: state.serverTime }}
+        />
         <button onClick={onLeave}>Lobby</button>
         <button onClick={onLogout}>Log out</button>
       </header>
@@ -160,6 +169,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                 provinces={state.provinces}
                 countries={state.countries}
                 myCountryId={state.me.countryId}
+                mode={mapMode}
                 atWarWith={state.atWarWith}
                 selectedKey={moveFormation ? dest : selected}
                 onSelect={handleMapSelect}
@@ -167,6 +177,22 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                 clockOffsetMs={clockOffsetMs}
                 previewPath={previewPath}
               />
+              <div className="map-modes">
+                {(['political', 'resources', 'terrain'] as MapMode[]).map((m) => (
+                  <button key={m} className={mapMode === m ? 'active' : ''} onClick={() => setMapMode(m)}>
+                    {m[0].toUpperCase() + m.slice(1)}
+                  </button>
+                ))}
+              </div>
+              {mapMode !== 'political' && (
+                <div className="map-legend small">
+                  {Object.entries(mapMode === 'terrain' ? TERRAIN_COLORS : RESOURCE_COLORS).map(([name, color]) => (
+                    <span key={name}>
+                      <i style={{ background: '#' + color.toString(16).padStart(6, '0') }} /> {name}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="map-hint muted small">
                 {moveFormation
                   ? 'Click the destination province'
@@ -216,8 +242,8 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
 
         {tab === 'economy' && <EconomyPanel state={state} balance={balance} onSelectProvince={selectProvince} />}
 
-        {tab === 'research' && <ComingSoon title="Research" text="Five research branches, timers, universities and laboratories." />}
-        {tab === 'generals' && <ComingSoon title="Generals" text="Named historical commanders, abilities, levels and collectibles." />}
+        {tab === 'research' && <ResearchPanel campaignId={campaignId} state={state} balance={balance} />}
+        {tab === 'generals' && <GeneralsPanel campaignId={campaignId} state={state} />}
         {tab === 'diplomacy' && <WarsPanel campaignId={campaignId} state={state} />}
       </div>
     </div>

@@ -6,6 +6,10 @@ import {
   OCCUPATION_DISRUPTION_SECONDS,
   CAPITAL_DEFENSE,
   explainBattle,
+  generalModifiers,
+  GENERAL_XP_LOSS,
+  GENERAL_XP_WALKOVER,
+  GENERAL_XP_WIN,
   hashSeed,
   resolveBattle,
   shortagesOf,
@@ -32,6 +36,8 @@ import {
   ProvinceRow,
   provinces,
 } from '../db/schema';
+import { loadResearch } from '../research/research.queries';
+import { deployedIn, settleGenerals, toDeployed } from '../generals/generals.queries';
 import { EconomyService } from '../economy/economy.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PlayersService } from '../players/players.service';
@@ -109,6 +115,15 @@ export class CombatService {
     const supplyMods = async (c: CountryRow, balance: Resources, side: 'attacker' | 'defender') =>
       supplyPenalty(shortagesOf(balance, await this.economy.computeRates(tx, c.id))).map((m) => ({ side, ...m }));
 
+    const researchMods = async (c: CountryRow, side: 'attacker' | 'defender') => {
+      const pct = (await loadResearch(tx, c.id)).summary.combatPercent;
+      return pct > 0 ? [{ side, label: 'Research', percent: pct }] : [];
+    };
+
+    // Generals leading the armies in this battle (read before any army is destroyed).
+    const attGenerals = await deployedIn(tx, [formation.id]);
+    const defGenerals = await deployedIn(tx, defFormations.map((f) => f.id));
+    const defUnitsOf = (fid: string) => tally(defUnitRows.filter((u) => u.formationId === fid));
     const attackerBefore = tally(a.units);
     const defenderBefore = tally(defUnitRows);
     const walkover = defenderBefore.length === 0;
@@ -119,8 +134,16 @@ export class CombatService {
       terrain: province.terrain,
       fortress: !!fort,
       provinceDefense: province.defense,
-      attackerModifiers: await supplyMods(attacker, attackerBalance, 'attacker'),
-      defenderModifiers: await supplyMods(defender, defenderBalance, 'defender'),
+      attackerModifiers: [
+        ...(await researchMods(attacker, 'attacker')),
+        ...generalModifiers('attacker', attGenerals.map((g) => toDeployed(g, attackerBefore)), a.arrivedAt),
+        ...(await supplyMods(attacker, attackerBalance, 'attacker')),
+      ],
+      defenderModifiers: [
+        ...(await researchMods(defender, 'defender')),
+        ...generalModifiers('defender', defGenerals.map((g) => toDeployed(g, defUnitsOf(g.deployedFormationId!))), a.arrivedAt),
+        ...(await supplyMods(defender, defenderBalance, 'defender')),
+      ],
     });
     const won = result.outcome === 'attacker_won';
 
@@ -150,6 +173,17 @@ export class CombatService {
       const left = await tx.select({ id: formationUnits.id }).from(formationUnits).where(eq(formationUnits.formationId, f.id));
       if (left.length === 0) await tx.delete(formations).where(eq(formations.id, f.id));
     }
+
+    // --- generals: experience, and a 24 hour lock for one whose army was destroyed ------------
+    const aftermath = await settleGenerals(
+      tx,
+      [
+        ...attGenerals.map((row) => ({ row, countryId: attacker.id, won, destroyed: !won })),
+        ...defGenerals.map((row) => ({ row, countryId: defender.id, won: !won, destroyed: won })),
+      ],
+      { win: walkover ? GENERAL_XP_WALKOVER : GENERAL_XP_WIN, loss: GENERAL_XP_LOSS },
+      Date.now(),
+    );
 
     // --- capture --------------------------------------------------------------------------
     let capturedCapital = false;
@@ -246,6 +280,9 @@ export class CombatService {
           : `Your forces held ${province.name} against ${attacker.name}.`,
       }),
     );
+    for (const n of aftermath.notes) {
+      notes.push(await this.notifications.add(tx, { campaignId: attacker.campaignId, ...n }));
+    }
     return { won, attackerUnits: result.attackerAfter, notes };
   }
 

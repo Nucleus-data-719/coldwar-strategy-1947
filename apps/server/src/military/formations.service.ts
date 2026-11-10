@@ -6,6 +6,7 @@ import { formationUnits, formations } from '../db/schema';
 import { EconomyService } from '../economy/economy.service';
 import { PlayersService } from '../players/players.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { moveGeneral } from '../generals/generals.queries';
 import { MovementService } from './movement.service';
 
 /** Army management in place: split units off into a task force, or merge two armies into one. */
@@ -66,6 +67,7 @@ export class FormationsService {
           await tx.update(formationUnits).set({ formationId: target.id }).where(eq(formationUnits.id, u.id));
         }
       }
+      await moveGeneral(tx, source.id, target.id);
       await tx.delete(formations).where(eq(formations.id, source.id));
     });
     this.realtime.campaignUpdate(campaignId, { kind: 'army' });

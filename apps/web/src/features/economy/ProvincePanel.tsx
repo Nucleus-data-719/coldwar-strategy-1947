@@ -103,7 +103,7 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
   const mine = p.ownerCountryId === state.me.countryId;
   const used = p.buildings.length;
   const hasFactory = p.buildings.some((b) => b.type === 'military_factory' && b.status === 'complete');
-  const factoryUnits = UNIT_TYPES.filter((t) => UNITS[t].factoryProducible);
+  const factoryUnits = UNIT_TYPES.filter((t) => UNITS[t].factoryProducible && state.research.unlockedUnits.includes(t));
   const orderCost: PartialResources = Object.fromEntries(
     Object.entries(UNITS[unitType].cost).map(([k, v]) => [k, (v ?? 0) * quantity]),
   );
@@ -197,6 +197,7 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
       {mine && hasFactory && (
         <>
           <h3>Factory production</h3>
+          <p className="muted small">More units (tanks, aircraft, ships) unlock in the Research tab.</p>
           {error && <p className="error small">{error}</p>}
           <div className="row">
             <select value={unitType} onChange={(e) => setUnitType(e.target.value as UnitType)}>

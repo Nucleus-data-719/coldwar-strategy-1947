@@ -44,13 +44,33 @@ describe('rules', () => {
 });
 
 describe('map data', () => {
-  it('has 72 provinces, each country owns some, and one capital per country', () => {
-    expect(PROVINCES.length).toBe(72);
+  it('has 150-250 provinces, each country owns some, and one capital per country', () => {
+    expect(PROVINCES.length).toBeGreaterThan(149);
+    expect(PROVINCES.length).toBeLessThan(251);
     for (const c of COUNTRIES) {
       const owned = PROVINCES.filter((p) => p.countryCode === c.code);
       expect(owned.length).toBeGreaterThan(0);
       expect(owned.filter((p) => p.isCapital).length).toBe(1);
     }
+  });
+
+  it('every capital name matches its country and every province has a neighbour', () => {
+    for (const c of COUNTRIES) {
+      const cap = PROVINCES.find((p) => p.countryCode === c.code && p.isCapital)!;
+      expect(cap.name).toBe(c.capitalName);
+    }
+    for (const p of PROVINCES) expect(p.adjacent.length).toBeGreaterThan(0);
+    for (const p of PROVINCES) expect(p.polygon.length).toBeGreaterThan(5);
+  });
+
+  it('the whole map is one connected world', () => {
+    const seen = new Set<string>([PROVINCES[0].key]);
+    const stack = [PROVINCES[0].key];
+    const byKey = new Map(PROVINCES.map((p) => [p.key, p]));
+    while (stack.length) {
+      for (const n of byKey.get(stack.pop()!)!.adjacent) if (!seen.has(n)) { seen.add(n); stack.push(n); }
+    }
+    expect(seen.size).toBe(PROVINCES.length);
   });
 
   it('adjacency is symmetric', () => {

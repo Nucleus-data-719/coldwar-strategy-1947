@@ -23,32 +23,32 @@ describe('movement', () => {
   });
 
   it('routes through own provinces only', () => {
-    const route = planRoute('p0_0', 'p2_1', baseCtx)!;
-    expect(route.path[0]).toBe('p0_0');
-    expect(route.path.at(-1)).toBe('p2_1');
-    expect(route.path.length).toBe(4);
-    expect(route.legSeconds.length).toBe(3);
+    const route = planRoute('washington', 'kansas_city', baseCtx)!;
+    expect(route.path[0]).toBe('washington');
+    expect(route.path.at(-1)).toBe('kansas_city');
+    expect(route.path.length).toBeGreaterThan(2);
+    expect(route.legSeconds.length).toBe(route.path.length - 1);
     for (const key of route.path) expect(usa.get(key)).toBe(ME);
   });
 
   it('refuses enemy destinations', () => {
-    expect(planRoute('p0_0', 'p0_3', baseCtx)).toBeNull();
+    expect(planRoute('washington', 'mexico_city', baseCtx)).toBeNull();
   });
 
   it('railways halve a leg and faster units arrive sooner', () => {
-    const slow = planRoute('p0_0', 'p2_1', baseCtx)!;
-    const fast = planRoute('p0_0', 'p2_1', { ...baseCtx, speed: 2 })!;
-    const rail = planRoute('p0_0', 'p2_1', { ...baseCtx, railwayKeys: new Set(slow.path) })!;
+    const slow = planRoute('washington', 'kansas_city', baseCtx)!;
+    const fast = planRoute('washington', 'kansas_city', { ...baseCtx, speed: 2 })!;
+    const rail = planRoute('washington', 'kansas_city', { ...baseCtx, railwayKeys: new Set(slow.path) })!;
     expect(fast.totalSeconds).toBeLessThan(slow.totalSeconds * 0.6);
     expect(rail.totalSeconds).toBeLessThan(slow.totalSeconds * 0.6);
   });
 
   it('game speed shortens travel', () => {
-    expect(legSeconds('p0_0', 'p0_1', 1, false, 60)).toBeLessThan(legSeconds('p0_0', 'p0_1', 1, false, 1) / 50);
+    expect(legSeconds('washington', 'pittsburgh', 1, false, 60)).toBeLessThan(legSeconds('washington', 'pittsburgh', 1, false, 1) / 50);
   });
 
   it('applies several finished legs after being offline, without drifting', () => {
-    const route = planRoute('p0_0', 'p2_1', baseCtx)!;
+    const route = planRoute('washington', 'kansas_city', baseCtx)!;
     const start = 1_000_000;
     const firstArrive = start + route.legSeconds[0] * 1000;
     const input = {
@@ -80,7 +80,7 @@ describe('movement', () => {
   });
 
   it('stops when the next province is no longer ours', () => {
-    const route = planRoute('p0_0', 'p2_1', baseCtx)!;
+    const route = planRoute('washington', 'kansas_city', baseCtx)!;
     const lost = new Map(usa);
     lost.set(route.path[2], THEM);
     const result = advanceMovement({
@@ -101,8 +101,8 @@ describe('movement', () => {
   it('plans through enemy land only when at war', () => {
     const goal = PROVINCES.find((p) => p.countryCode !== 'USA')!.key;
     const enemyId = usa.get(goal)!;
-    expect(planRoute('p0_0', goal, baseCtx)).toBeNull();
-    const route = planRoute('p0_0', goal, { ...baseCtx, atWarWith: new Set([enemyId]) });
+    expect(planRoute('washington', goal, baseCtx)).toBeNull();
+    const route = planRoute('washington', goal, { ...baseCtx, atWarWith: new Set([enemyId]) });
     expect(route !== null).toBe(true);
   });
 
@@ -110,7 +110,7 @@ describe('movement', () => {
     const goal = PROVINCES.find((p) => p.countryCode !== 'USA')!.key;
     const enemyId = usa.get(goal)!;
     const war = { ...baseCtx, atWarWith: new Set([enemyId]) };
-    const route = planRoute('p0_0', goal, war)!;
+    const route = planRoute('washington', goal, war)!;
     const firstEnemy = route.path.findIndex((k) => usa.get(k) === enemyId);
     expect(firstEnemy).toBeGreaterThan(0);
     const result = advanceMovement({

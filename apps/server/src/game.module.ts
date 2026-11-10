@@ -5,6 +5,9 @@ import { BuildingsService } from './buildings/buildings.service';
 import { CampaignsController } from './campaigns/campaigns.controller';
 import { CampaignsService } from './campaigns/campaigns.service';
 import { EconomyService } from './economy/economy.service';
+import { FeedbackController } from './feedback/feedback.controller';
+import { GeneralsService } from './generals/generals.service';
+import { ResearchService } from './research/research.service';
 import { CapitalService } from './capital/capital.service';
 import { FormationsService } from './military/formations.service';
 import { ProductionService } from './production/production.service';
@@ -17,7 +20,7 @@ import { WarsService } from './wars/wars.service';
 
 @Module({
   imports: [AuthModule],
-  controllers: [CampaignsController],
+  controllers: [CampaignsController, FeedbackController],
   providers: [
     EconomyService,
     PlayersService,
@@ -27,6 +30,8 @@ import { WarsService } from './wars/wars.service';
     CombatService,
     ProductionService,
     CapitalService,
+    ResearchService,
+    GeneralsService,
     MovementService,
     FormationsService,
     CampaignsService,

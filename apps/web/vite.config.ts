@@ -16,6 +16,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Listen on the network so friends can join your test (see docs/PLAYTEST.md).
+    host: true,
+    // Lets a tunnel address (ngrok, cloudflared) reach the dev server. Needs Vite 5.4.12+, ignored by older ones.
+    allowedHosts: true,
     proxy: {
       '/api': { target: SERVER, changeOrigin: true },
       '/socket.io': { target: SERVER, ws: true },

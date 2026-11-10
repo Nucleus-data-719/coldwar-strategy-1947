@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { PROVINCE_BY_KEY, UNITS, formatDuration, type FormationDto, type UnitType } from '@cw/shared';
+import { GENERAL_BY_ID, PROVINCE_BY_KEY, UNITS, formatDuration, type FormationDto, type UnitType } from '@cw/shared';
 import { api } from '../../services/api';
 import { useNow } from '../../hooks/useNow';
 
@@ -60,6 +60,7 @@ export function ArmiesPanel({ campaignId, formations, activeId, onMove, onFocus 
                   {f.name}
                 </button>
                 <div className="muted small">{summary}</div>
+                {f.generalId && <div className="small">General: {GENERAL_BY_ID[f.generalId]?.name}</div>}
                 <div className="small">
                   {m
                     ? `→ ${PROVINCE_BY_KEY[finalKey!]?.name} · next stop in ${formatDuration(nextIn)}`

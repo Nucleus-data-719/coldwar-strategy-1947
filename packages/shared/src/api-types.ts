@@ -99,6 +99,7 @@ export interface GameState {
   /** Ids of the countries you are at war with. */
   atWarWith: string[];
   resources: { balance: Resources; rates: Resources; shortages: ResourceKey[] };
+  research: ResearchStateDto;
   /** A capital move in progress, if any. */
   capitalMove: { provinceKey: string; completesAt: string } | null;
   serverTime: string;
@@ -121,6 +122,8 @@ export interface FormationDto {
   provinceKey: string;
   units: { unitType: UnitType; count: number }[];
   movement: MovementDto | null;
+  /** Id of the general leading this army, if any (yours only). */
+  generalId?: string | null;
 }
 
 export interface ProvinceDetail {
@@ -150,6 +153,41 @@ export interface ProductionOrderDto {
   /** 'building' is the unit in production; the rest are waiting. */
   status: 'building' | 'queued';
   completesAt: string | null;
+}
+
+export interface ResearchStateDto {
+  done: string[];
+  active: { techId: string; startedAt: string; completesAt: string } | null;
+  labs: number;
+  universities: number;
+  /** Research speed bonus in percent, after the cap. */
+  speedPercent: number;
+  /** Before the cap. Higher than speedPercent when the cap is limiting you. */
+  rawSpeedPercent: number;
+  productionPercent: number;
+  combatPercent: number;
+  unlockedUnits: UnitType[];
+}
+
+export interface GeneralDto {
+  generalId: string;
+  unlocked: boolean;
+  fragments: number;
+  xp: number;
+  level: number;
+  deployedFormationId: string | null;
+  /** Set after his army was destroyed. */
+  lockedUntil: string | null;
+  abilityActiveUntil: string | null;
+  abilityReadyAt: string | null;
+}
+
+export interface GeneralsStateDto {
+  generals: GeneralDto[];
+  deployed: number;
+  slots: number;
+  /** When the next free fragment can be claimed; null means now. */
+  nextDispatchAt: string | null;
 }
 
 export interface WarDto {

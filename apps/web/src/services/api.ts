@@ -1,4 +1,5 @@
 import type {
+  GeneralsStateDto,
   BattleReportDto,
   WarDto,
   CampaignSummary,
@@ -92,6 +93,23 @@ export const api = {
     post<{ ok: true }>(`/campaigns/${campaignId}/formations/${formationId}/split`, { units }),
   moveCapital: (campaignId: string, provinceId: string) =>
     post<{ ok: true; completesAt: string }>(`/campaigns/${campaignId}/capital`, { provinceId }),
+
+  startResearch: (campaignId: string, techId: string) =>
+    post<{ ok: true; completesAt: string }>(`/campaigns/${campaignId}/research`, { techId }),
+  cancelResearch: (campaignId: string) => post<{ ok: true }>(`/campaigns/${campaignId}/research/cancel`),
+
+  generals: (campaignId: string) => request<GeneralsStateDto>(`/campaigns/${campaignId}/generals`),
+  claimDispatch: (campaignId: string) =>
+    post<{ ok: true; generalId: string; fragments: number; needed: number; recruited: boolean }>(`/campaigns/${campaignId}/generals/dispatch`),
+  deployGeneral: (campaignId: string, generalId: string, formationId: string) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/generals/${generalId}/deploy`, { formationId }),
+  undeployGeneral: (campaignId: string, generalId: string) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/generals/${generalId}/undeploy`),
+  activateGeneral: (campaignId: string, generalId: string) =>
+    post<{ ok: true; activeUntil: string }>(`/campaigns/${campaignId}/generals/${generalId}/activate`),
+
+  feedback: (message: string, campaignId?: string, context?: Record<string, unknown>) =>
+    post<{ ok: true }>('/feedback', { message, campaignId, context }),
 
   wars: (campaignId: string) => request<WarDto[]>(`/campaigns/${campaignId}/wars`),
   declareWar: (campaignId: string, countryId: string) =>

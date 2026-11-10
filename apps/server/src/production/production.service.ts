@@ -20,6 +20,7 @@ import { addToGarrison } from '../military/garrison';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PlayersService } from '../players/players.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { loadResearch } from '../research/research.queries';
 
 export function toOrderDto(r: ProductionOrderRow): ProductionOrderDto {
   return {
@@ -65,6 +66,10 @@ export class ProductionService {
       if (!province) throw new NotFoundException('Province not found');
       if (province.ownerCountryId !== country.id) throw new BadRequestException('Not your province');
       if (province.disruptedUntil) throw new BadRequestException('The province is occupied and cannot produce yet');
+      const unlocked = (await loadResearch(tx, country.id)).summary.unlockedUnits;
+      if (!unlocked.includes(unitType)) {
+        throw new BadRequestException(`${def.name} has not been researched yet. Open the Research tab.`);
+      }
       const [factory] = await tx
         .select({ id: buildings.id })
         .from(buildings)

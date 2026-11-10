@@ -64,18 +64,18 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   research_lab: {
     type: 'research_lab',
     name: 'Research Laboratory',
-    description: 'Will improve research speed (arrives with the research update).',
+    description: 'Research speed +15% for the next project you start. Total research speed is capped at +100%.',
     cost: { money: 700, steel: 100, electronics: 40 },
     buildSeconds: 7200,
-    effectActive: false,
+    effectActive: true,
   },
   university: {
     type: 'university',
     name: 'University',
-    description: 'Will raise national scientific capacity (arrives with the research update).',
+    description: 'Research speed +25% for the next project you start. Total research speed is capped at +100%.',
     cost: { money: 1000, steel: 150, electronics: 60 },
     buildSeconds: 10800,
-    effectActive: false,
+    effectActive: true,
   },
   fortress: {
     type: 'fortress',
