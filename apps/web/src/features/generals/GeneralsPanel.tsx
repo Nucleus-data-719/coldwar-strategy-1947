@@ -108,11 +108,11 @@ export function GeneralsPanel({ campaignId, state }: { campaignId: string; state
                     <div className="small">Not recruited: {g.fragments} / {need} fragments</div>
                   ) : (
                     <>
-                      <div className="small" title={`Base ${generalPassivePercent(def, 1)}%, +1% per level`}>
+                      <div className="small" data-tip={`Base ${generalPassivePercent(def, 1)}%, +1% per level`}>
                         Level {g.level}/{GENERAL_LEVEL_XP.length} · +{generalPassivePercent(def, g.level)}% combat · {g.xp} XP
                         {toNext !== null ? ` (${toNext} to next level)` : ' (max)'}
                       </div>
-                      <div className="small" title={`${abilityName(def)}: +${generalActivePercent(def)}% for ${formatDuration(scaleSeconds(GENERAL_ACTIVE_SECONDS, gs))}, cooldown ${formatDuration(scaleSeconds(GENERAL_COOLDOWN_SECONDS, gs))}`}>
+                      <div className="small" data-tip={`${abilityName(def)}: +${generalActivePercent(def)}% for ${formatDuration(scaleSeconds(GENERAL_ACTIVE_SECONDS, gs))}, cooldown ${formatDuration(scaleSeconds(GENERAL_COOLDOWN_SECONDS, gs))}`}>
                         {abilityName(def)}: +{generalActivePercent(def)}% for {formatDuration(scaleSeconds(GENERAL_ACTIVE_SECONDS, gs))}
                         {active > 0 ? ` · active, ${formatDuration(active)} left` : cooldown > 0 ? ` · ready in ${formatDuration(cooldown)}` : ' · ready'}
                       </div>

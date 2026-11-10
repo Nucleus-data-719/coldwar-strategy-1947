@@ -292,7 +292,7 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
                   <button
                     className="primary"
                     disabled={!!reason || build.isPending}
-                    title={reason ?? 'Start construction'}
+                    data-tip={reason ?? 'Start construction'}
                     onClick={() => build.mutate(type)}
                   >
                     {reason ?? 'Build'}

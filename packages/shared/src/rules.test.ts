@@ -17,6 +17,12 @@ describe('rules', () => {
     const base = { ...emptyResources(), money: 100 };
     expect(provinceProduction(base, [{ type: 'local_factory', status: 'constructing' }]).money).toBe(100);
     expect(provinceProduction(base, [{ type: 'local_factory', status: 'complete' }]).money).toBe(125);
+    // Food and manpower are not industrial.
+    const mixed = { ...base, food: 100, manpower: 100, oil: 20 };
+    const built = provinceProduction(mixed, [{ type: 'local_factory', status: 'complete' }]);
+    expect(built.food).toBe(100);
+    expect(built.manpower).toBe(100);
+    expect(built.oil).toBe(25);
   });
 
   it('applyRates never goes below zero', () => {

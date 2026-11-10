@@ -9,6 +9,7 @@ import {
   subtractResources,
   unitUpkeepPerHour,
   type BuildingLike,
+  INDUSTRIAL_RESOURCES,
   type ResourceKey,
   type Resources,
 } from '@cw/shared';
@@ -66,9 +67,9 @@ export class EconomyService {
       }
     }
 
-    // Research: industry techs raise everything the country produces.
+    // Research: industry techs raise industrial output (money and strategic resources), not food or manpower.
     const bonus = (await loadResearch(db, countryId)).summary.productionPercent;
-    if (bonus > 0) for (const k of Object.keys(total) as ResourceKey[]) total[k] *= 1 + bonus / 100;
+    if (bonus > 0) for (const k of INDUSTRIAL_RESOURCES) total[k] *= 1 + bonus / 100;
 
     const units = await db
       .select({ unitType: formationUnits.unitType, count: formationUnits.count })

@@ -187,3 +187,14 @@ How it works:
 - The AI does not attack yet; it only defends. Peace treaties arrive with diplomacy.
 
 Done when: you capture an AI province, its income moves to you (after the occupation period), and the report tells you why you won.
+
+
+## Week 9 - Interface overhaul
+
+* **Design system** in `apps/web/src/styles/styles.css`: colour tokens (brass / NATO blue / Soviet red on a dark situation-room base), type scale, 4px spacing grid, buttons (primary, secondary, danger, ghost, icon), inputs, panels, chips, tables, progress bars and CSS tooltips (`data-tip="..."`, optional `data-tip-pos="below|right|left"`). Every screen uses these; nothing relies on the browser default look.
+* **Layout**: fixed top bar (country, all seven resources with icons, rates and hover explanations, alerts bell with unread count, report button), navigation rail along the left edge, and a slide-in details drawer (Province / Armies / Battles / Alerts) that sits beside the map and never covers it. On narrow screens the rail becomes a bottom bar and the drawer a bottom sheet.
+* `components/Icon.tsx` holds the SVG icons; resource icons match the ones drawn on the map.
+* The map now resizes when the drawer opens or closes (ResizeObserver).
+* Login and lobby were restyled with the same crest and components.
+* **Local Factory fix** (from Week 8 feedback): Local Factory and Industry research boost only money, oil, steel, electronics and rare materials, never food or manpower.
+* No database changes this week.

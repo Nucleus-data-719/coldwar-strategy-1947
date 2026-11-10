@@ -354,11 +354,16 @@ export function WorldMap({
         window.addEventListener('pointerup', up);
         canvas.addEventListener('wheel', wheel, { passive: false });
 
+        // The side drawer opens and closes without a window resize, so watch the map's own box.
+        const resizeObserver = new ResizeObserver(() => app.resize());
+        resizeObserver.observe(host);
+
         ctxRef.current = {
           app,
           world,
           shapes,
           dispose: () => {
+            resizeObserver.disconnect();
             app.ticker.remove(drawArmies);
             app.ticker.remove(syncLabels);
             canvas.removeEventListener('pointerdown', down);

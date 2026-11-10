@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
 
+/** Number of unread notifications (shares the cache with the panel). */
+export function useUnreadCount(campaignId: string): number {
+  const list = useQuery({ queryKey: ['notifications', campaignId], queryFn: () => api.notifications(campaignId) });
+  return list.data?.filter((n) => !n.read).length ?? 0;
+}
+
 export function NotificationsPanel({ campaignId }: { campaignId: string }) {
   const qc = useQueryClient();
   const list = useQuery({ queryKey: ['notifications', campaignId], queryFn: () => api.notifications(campaignId) });

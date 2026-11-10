@@ -71,8 +71,8 @@ export function ResearchPanel({ campaignId, state, balance }: { campaignId: stri
         <p className="small">
           Research speed <strong>+{r.speedPercent}%</strong>
           {capped && <span className="warn"> (cap reached, {r.rawSpeedPercent}% before the cap)</span>} ·{' '}
-          <span title={`Each laboratory adds ${RESEARCH_LAB_BONUS}%`}>{r.labs} laboratories</span>,{' '}
-          <span title={`Each university adds ${UNIVERSITY_BONUS}%`}>{r.universities} universities</span>
+          <span data-tip={`Each laboratory adds ${RESEARCH_LAB_BONUS}%`}>{r.labs} laboratories</span>,{' '}
+          <span data-tip={`Each university adds ${UNIVERSITY_BONUS}%`}>{r.universities} universities</span>
         </p>
         <p className="muted small">
           Laboratories give +{RESEARCH_LAB_BONUS}% and universities +{UNIVERSITY_BONUS}%. Speed is capped at +{RESEARCH_SPEED_CAP}% and
@@ -129,7 +129,7 @@ export function ResearchPanel({ campaignId, state, balance }: { campaignId: stri
                         <button
                           disabled={!!r.active || !affordable || start.isPending}
                           onClick={() => start.mutate(t.id)}
-                          title={r.active ? 'Another project is running' : !affordable ? 'Not enough resources' : ''}
+                          data-tip={r.active ? 'Another project is running' : !affordable ? 'Not enough resources' : ''}
                         >
                           Research
                         </button>

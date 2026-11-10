@@ -87,11 +87,11 @@ export const TECHS: TechDef[] = [
   tech('naval_5', 'naval', 5, 'Sonar and Missiles', 'Detect submarines, and answer them.', ['naval_4'], { combatPercent: 4 }),
 
   // Industry
-  tech('ind_1', 'industry', 1, 'Assembly Lines', 'Standardised parts and shift work: +5% production.', [], { productionPercent: 5 }),
-  tech('ind_2', 'industry', 2, 'Electronics Industry', 'Radio, radar and early computers: +5% production.', ['ind_1'], { productionPercent: 5 }),
-  tech('ind_3', 'industry', 3, 'Automation', 'Machines do the repetitive work: +5% production.', ['ind_2'], { productionPercent: 5 }),
+  tech('ind_1', 'industry', 1, 'Assembly Lines', 'Standardised parts and shift work: +5% industrial output.', [], { productionPercent: 5 }),
+  tech('ind_2', 'industry', 2, 'Electronics Industry', 'Radio, radar and early computers: +5% industrial output.', ['ind_1'], { productionPercent: 5 }),
+  tech('ind_3', 'industry', 3, 'Automation', 'Machines do the repetitive work: +5% industrial output.', ['ind_2'], { productionPercent: 5 }),
   tech('ind_4', 'industry', 4, 'Research Institutes', 'State-funded science: +15% research speed.', ['ind_2'], { researchSpeedPercent: 15 }),
-  tech('ind_5', 'industry', 5, 'Mainframe Computers', 'Planning by computer: +5% production.', ['ind_3', 'ind_4'], { productionPercent: 5 }),
+  tech('ind_5', 'industry', 5, 'Mainframe Computers', 'Planning by computer: +5% industrial output.', ['ind_3', 'ind_4'], { productionPercent: 5 }),
 ];
 
 export const TECH_BY_ID: Record<string, TechDef> = Object.fromEntries(TECHS.map((t) => [t.id, t]));

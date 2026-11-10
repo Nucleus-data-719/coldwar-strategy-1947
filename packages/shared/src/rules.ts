@@ -37,6 +37,9 @@ export function spend(balance: Resources, cost: PartialResources): Resources {
   return subtractResources(balance, cost);
 }
 
+/** Industry boosts these. Food and manpower come from the land and its people, not from factories. */
+export const INDUSTRIAL_RESOURCES: ResourceKey[] = ['money', 'oil', 'steel', 'electronics', 'rare'];
+
 /** Hourly production of one province, including completed buildings. */
 export function provinceProduction(base: Resources, buildings: BuildingLike[]): Resources {
   let multiplier = 1;
@@ -44,7 +47,7 @@ export function provinceProduction(base: Resources, buildings: BuildingLike[]): 
     if (b.status === 'complete') multiplier += BUILDINGS[b.type].productionBonus ?? 0;
   }
   const out = emptyResources();
-  for (const k of RESOURCE_KEYS) out[k] = base[k] * multiplier;
+  for (const k of RESOURCE_KEYS) out[k] = INDUSTRIAL_RESOURCES.includes(k) ? base[k] * multiplier : base[k];
   return out;
 }
 

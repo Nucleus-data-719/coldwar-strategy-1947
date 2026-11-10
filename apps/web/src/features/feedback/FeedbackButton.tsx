@@ -1,3 +1,4 @@
+import { Icon } from '../../components/Icon';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { api } from '../../services/api';
@@ -40,7 +41,9 @@ export function FeedbackButton({ campaignId, details }: { campaignId?: string; d
     },
   });
 
-  if (!open) return <button onClick={() => setOpen(true)}>Report a problem</button>;
+  if (!open) return <button className="ghost icon" data-tip="Report a problem" data-tip-pos="below" aria-label="Report a problem" onClick={() => setOpen(true)}>
+      <Icon name="report" />
+    </button>;
   return (
     <div className="card feedback-box">
       <div className="row between">

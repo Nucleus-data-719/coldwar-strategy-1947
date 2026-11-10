@@ -71,7 +71,7 @@ export function DiplomacyPanel({ campaignId, state }: { campaignId: string; stat
         )}
         {c.alliance === 'active' && (
           <button
-            title="Ends the pact. They will remember it (-30 opinion)."
+            data-tip="Ends the pact. They will remember it (-30 opinion)."
             onClick={() => run(() => api.breakAlliance(campaignId, c.countryId))}
           >
             Break alliance
@@ -96,7 +96,7 @@ export function DiplomacyPanel({ campaignId, state }: { campaignId: string; stat
           <strong>{formatDuration((Date.parse(c.joinsAt) - now) / 1000)}</strong>.
           <div className="row">
             <button className="danger" onClick={() => run(() => api.joinCall(campaignId, c.id))}>Join now</button>
-            <button onClick={() => run(() => api.declineCall(campaignId, c.id))} title="Ends the alliance with the attacked country (-40 opinion)">
+            <button onClick={() => run(() => api.declineCall(campaignId, c.id))} data-tip="Ends the alliance with the attacked country (-40 opinion)">
               Decline (ends the alliance)
             </button>
           </div>
@@ -120,8 +120,8 @@ export function DiplomacyPanel({ campaignId, state }: { campaignId: string; stat
                 <span>
                   <span className="swatch" style={{ background: c.color }} /> {c.name}{' '}
                   <span className="muted small">{c.aiControlled ? 'AI' : 'player'}</span>{' '}
-                  <span className={`stage ${c.stage}`} title="Stage comes from opinion, war and alliance">{STAGE_LABEL[c.stage]}</span>{' '}
-                  <span className="muted small" title="-100 to 100, same both ways">opinion {c.opinion}</span>
+                  <span className={`stage ${c.stage}`} data-tip="Stage comes from opinion, war and alliance">{STAGE_LABEL[c.stage]}</span>{' '}
+                  <span className="muted small" data-tip="-100 to 100, same both ways">opinion {c.opinion}</span>
                 </span>
                 {rowButtons(c)}
               </div>

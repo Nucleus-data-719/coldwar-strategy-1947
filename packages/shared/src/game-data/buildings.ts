@@ -21,7 +21,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   local_factory: {
     type: 'local_factory',
     name: 'Local Factory',
-    description: 'Increases all resource production of this province by 25%.',
+    description: 'Increases money and strategic resource (oil, steel, electronics, rare) production of this province by 25%. Food and manpower are not affected.',
     cost: { money: 400, steel: 80 },
     buildSeconds: 3600,
     effectActive: true,

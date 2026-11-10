@@ -1,3 +1,4 @@
+import { Crest } from '../components/Icon';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PublicUser } from '@cw/shared';
@@ -48,6 +49,7 @@ export function LobbyPage({ user, onEnter, onLogout }: Props) {
   return (
     <div className="lobby">
       <header className="topbar">
+        <Crest size={32} />
         <strong>Cold War 1947</strong>
         <span className="spacer" />
         <span className="muted">Signed in as {user.username}</span>

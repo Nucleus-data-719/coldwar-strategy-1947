@@ -1,3 +1,4 @@
+import { Crest } from '../components/Icon';
 import { FormEvent, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
@@ -26,10 +27,23 @@ export function AuthPage() {
   };
 
   return (
-    <div className="center">
+    <div className="auth-screen">
       <form className="card auth" onSubmit={submit}>
-        <h1>Cold War 1947</h1>
-        <p className="muted">{mode === 'login' ? 'Sign in to your campaign.' : 'Create your commander account.'}</p>
+        <div className="brand">
+          <Crest size={56} />
+          <h1>
+            Cold War <span className="year">1947</span>
+          </h1>
+          <p>Command a nation. Shape the world.</p>
+        </div>
+        <div className="auth-tabs" role="tablist">
+          <button type="button" role="tab" className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>
+            Sign in
+          </button>
+          <button type="button" role="tab" className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>
+            Create account
+          </button>
+        </div>
         <label>
           Username
           <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required />
@@ -49,9 +63,6 @@ export function AuthPage() {
         {error && <p className="error">{error}</p>}
         <button className="primary" disabled={busy}>
           {mode === 'login' ? 'Sign in' : 'Create account'}
-        </button>
-        <button type="button" className="link" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
-          {mode === 'login' ? 'Need an account? Register' : 'Already registered? Sign in'}
         </button>
       </form>
     </div>

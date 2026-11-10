@@ -6,7 +6,8 @@ import { RESOURCE_COLORS, TERRAIN_COLORS, WorldMap, type MapMode } from '../feat
 import { ResourceBar, useProjectedBalance } from '../features/economy/ResourceBar';
 import { ProvincePanel } from '../features/economy/ProvincePanel';
 import { EconomyPanel } from '../features/economy/EconomyPanel';
-import { NotificationsPanel } from '../features/economy/NotificationsPanel';
+import { Crest, Icon, type IconName } from '../components/Icon';
+import { NotificationsPanel, useUnreadCount } from '../features/economy/NotificationsPanel';
 import { ArmiesPanel } from '../features/military/ArmiesPanel';
 import { MovePanel } from '../features/military/MovePanel';
 import { BattlesPanel } from '../features/military/BattlesPanel';
@@ -16,12 +17,20 @@ import { GeneralsPanel } from '../features/generals/GeneralsPanel';
 import { DiplomacyPanel } from '../features/diplomacy/DiplomacyPanel';
 
 type Tab = 'world' | 'research' | 'economy' | 'generals' | 'diplomacy';
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'world', label: 'World' },
-  { id: 'research', label: 'Research' },
-  { id: 'economy', label: 'Economy' },
-  { id: 'generals', label: 'Generals' },
-  { id: 'diplomacy', label: 'Diplomacy' },
+const TABS: { id: Tab; label: string; icon: IconName }[] = [
+  { id: 'world', label: 'World', icon: 'world' },
+  { id: 'economy', label: 'Economy', icon: 'economy' },
+  { id: 'research', label: 'Research', icon: 'research' },
+  { id: 'generals', label: 'Generals', icon: 'generals' },
+  { id: 'diplomacy', label: 'Diplomacy', icon: 'diplomacy' },
+];
+
+type DrawerTab = 'province' | 'armies' | 'battles' | 'alerts';
+const DRAWER_TABS: { id: DrawerTab; label: string }[] = [
+  { id: 'province', label: 'Province' },
+  { id: 'armies', label: 'Armies' },
+  { id: 'battles', label: 'Battles' },
+  { id: 'alerts', label: 'Alerts' },
 ];
 
 const ZERO = { money: 0, food: 0, oil: 0, steel: 0, electronics: 0, rare: 0, manpower: 0 };
@@ -37,6 +46,9 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
   const [tab, setTab] = useState<Tab>('world');
   const [selected, setSelected] = useState<string | null>(null);
   const [mapMode, setMapMode] = useState<MapMode>('political');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<DrawerTab>('province');
+  const unread = useUnreadCount(campaignId);
 
   // Move mode: pick an army, then click a destination on the map.
   const [moveFormationId, setMoveFormationId] = useState<string | null>(null);
@@ -91,6 +103,8 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
 
   const startMove = (formationId: string) => {
     setTab('world');
+    setDrawerOpen(true);
+    setDrawerTab('province');
     setMoveFormationId(formationId);
     setDest(null);
     setPreviewPath(null);
@@ -108,6 +122,10 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
       return;
     }
     setSelected(key);
+    if (key) {
+      setDrawerOpen(true);
+      setDrawerTab('province');
+    }
   };
 
   if (error) {
@@ -127,39 +145,73 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
     cancelMove();
     setSelected(key);
     setTab('world');
+    setDrawerOpen(true);
+    setDrawerTab('province');
   };
 
   return (
     <div className="game">
-      <header className="topbar">
-        <strong>{myCountry?.name ?? 'Cold War 1947'}</strong>
-        <span className="muted small">
-          {state.campaign.name}
-          {state.campaign.gameSpeed !== 1 ? ` · speed x${state.campaign.gameSpeed}` : ''}
-        </span>
-        <span className="spacer" />
-        <FeedbackButton
-          campaignId={campaignId}
-          details={{ tab, selected, mapMode, country: myCountry?.code, stateAt: state.serverTime }}
+      <header className="hud">
+        <div className="hud-id">
+          <Crest size={36} />
+          <div className="hud-title">
+            <strong>{myCountry?.name ?? 'Cold War 1947'}</strong>
+            <span>{state.campaign.name}</span>
+          </div>
+          {state.campaign.gameSpeed !== 1 && <span className="pill">Speed x{state.campaign.gameSpeed}</span>}
+        </div>
+
+        <ResourceBar
+          balance={state.resources.balance}
+          rates={state.resources.rates}
+          shortages={state.resources.shortages}
+          receivedAt={dataUpdatedAt || Date.now()}
+          gameSpeed={state.campaign.gameSpeed}
         />
-        <button onClick={onLeave}>Lobby</button>
-        <button onClick={onLogout}>Log out</button>
+
+        <div className="hud-actions">
+          <button
+            className="ghost icon"
+            data-tip={unread ? `${unread} unread alerts` : 'Alerts'}
+            data-tip-pos="below"
+            aria-label="Alerts"
+            onClick={() => {
+              setTab('world');
+              setDrawerOpen(true);
+              setDrawerTab('alerts');
+            }}
+          >
+            <Icon name="bell" />
+            {unread > 0 && <span className="badge bell-count">{unread > 99 ? '99+' : unread}</span>}
+          </button>
+          <FeedbackButton
+            campaignId={campaignId}
+            details={{ tab, selected, mapMode, country: myCountry?.code, stateAt: state.serverTime }}
+          />
+        </div>
       </header>
 
-      <ResourceBar
-        balance={state.resources.balance}
-        rates={state.resources.rates}
-        shortages={state.resources.shortages}
-        receivedAt={dataUpdatedAt || Date.now()}
-        gameSpeed={state.campaign.gameSpeed}
-      />
-
-      <nav className="tabs">
+      <nav className="rail" aria-label="Main">
         {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? 'tab active' : 'tab'} onClick={() => setTab(t.id)}>
+          <button
+            key={t.id}
+            className={tab === t.id ? 'nav-btn active' : 'nav-btn'}
+            onClick={() => setTab(t.id)}
+            aria-current={tab === t.id ? 'page' : undefined}
+          >
+            <Icon name={t.icon} size={22} />
             {t.label}
           </button>
         ))}
+        <span className="rail-sep" />
+        <button className="nav-btn" onClick={onLeave} data-tip="Back to the lobby" data-tip-pos="right">
+          <Icon name="back" size={22} />
+          Lobby
+        </button>
+        <button className="nav-btn" onClick={onLogout} data-tip="Sign out" data-tip-pos="right">
+          <Icon name="logout" size={22} />
+          Exit
+        </button>
       </nav>
 
       <div className="game-body">
@@ -194,71 +246,105 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                   ))}
                 </div>
               )}
-              <div className="map-hint muted small">
+              {!drawerOpen && (
+                <button className="map-open primary" onClick={() => setDrawerOpen(true)}>
+                  <Icon name="province" size={18} /> Details
+                </button>
+              )}
+              <div className={moveFormation ? 'map-hint small move' : 'map-hint muted small'}>
                 {moveFormation
                   ? 'Click the destination province'
                   : 'Drag to pan · scroll to zoom · click a province'}
               </div>
             </div>
-            <aside className="sidebar">
-              {moveFormation ? (
-                <MovePanel
-                  key={moveFormation.id}
-                  campaignId={campaignId}
-                  state={state}
-                  formation={moveFormation}
-                  dest={dest}
-                  onPreview={setPreviewPath}
-                  onClose={cancelMove}
-                />
-              ) : selected ? (
-                <ProvincePanel
-                  campaignId={campaignId}
-                  state={state}
-                  provinceKey={selected}
-                  balance={balance}
-                  onStartMove={startMove}
-                />
-              ) : (
-                <div className="card">
-                  <h2>Select a province</h2>
-                  <p className="muted small">
-                    Click any province on the map to see its production, buildings and forces. Gold outline = your
-                    provinces. ⚔ units · ▣ buildings · ⏳ under construction. Gold lines show armies on the march.
-                  </p>
+            {drawerOpen && (
+              <aside className="drawer" aria-label="Details">
+                <div className="drawer-head">
+                  <div className="seg" role="tablist">
+                    {DRAWER_TABS.map((t) => (
+                      <button
+                        key={t.id}
+                        role="tab"
+                        className={drawerTab === t.id ? 'active' : ''}
+                        onClick={() => setDrawerTab(t.id)}
+                      >
+                        {t.label}
+                        {t.id === 'alerts' && unread > 0 && <span className="badge">{unread}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="ghost icon" aria-label="Close panel" data-tip="Close" data-tip-pos="below" onClick={() => setDrawerOpen(false)}>
+                    <Icon name="close" />
+                  </button>
                 </div>
-              )}
-              <ArmiesPanel
-                campaignId={campaignId}
-                formations={state.formations}
-                activeId={moveFormationId}
-                onMove={startMove}
-                onFocus={selectProvince}
-              />
-              <BattlesPanel campaignId={campaignId} myCountryId={state.me.countryId} />
-              <NotificationsPanel campaignId={campaignId} />
-            </aside>
+                <div className="drawer-body">
+                  {drawerTab === 'province' &&
+                    (moveFormation ? (
+                      <MovePanel
+                        key={moveFormation.id}
+                        campaignId={campaignId}
+                        state={state}
+                        formation={moveFormation}
+                        dest={dest}
+                        onPreview={setPreviewPath}
+                        onClose={cancelMove}
+                      />
+                    ) : selected ? (
+                      <ProvincePanel
+                        campaignId={campaignId}
+                        state={state}
+                        provinceKey={selected}
+                        balance={balance}
+                        onStartMove={startMove}
+                      />
+                    ) : (
+                      <div className="card">
+                        <h2>Select a province</h2>
+                        <p className="muted small">
+                          Click any province on the map to see its production, buildings and forces. Gold outline = your
+                          provinces. Gold lines show armies on the march.
+                        </p>
+                      </div>
+                    ))}
+                  {drawerTab === 'armies' && (
+                    <ArmiesPanel
+                      campaignId={campaignId}
+                      formations={state.formations}
+                      activeId={moveFormationId}
+                      onMove={startMove}
+                      onFocus={selectProvince}
+                    />
+                  )}
+                  {drawerTab === 'battles' && <BattlesPanel campaignId={campaignId} myCountryId={state.me.countryId} />}
+                  {drawerTab === 'alerts' && <NotificationsPanel campaignId={campaignId} />}
+                </div>
+              </aside>
+            )}
           </>
         )}
 
-        {tab === 'economy' && <EconomyPanel state={state} balance={balance} onSelectProvince={selectProvince} />}
+        {tab === 'economy' && (
+          <div className="page-scroll">
+            <EconomyPanel state={state} balance={balance} onSelectProvince={selectProvince} />
+          </div>
+        )}
 
-        {tab === 'research' && <ResearchPanel campaignId={campaignId} state={state} balance={balance} />}
-        {tab === 'generals' && <GeneralsPanel campaignId={campaignId} state={state} />}
-        {tab === 'diplomacy' && <DiplomacyPanel campaignId={campaignId} state={state} />}
+        {tab === 'research' && (
+          <div className="page-scroll">
+            <ResearchPanel campaignId={campaignId} state={state} balance={balance} />
+          </div>
+        )}
+        {tab === 'generals' && (
+          <div className="page-scroll">
+            <GeneralsPanel campaignId={campaignId} state={state} />
+          </div>
+        )}
+        {tab === 'diplomacy' && (
+          <div className="page-scroll">
+            <DiplomacyPanel campaignId={campaignId} state={state} />
+          </div>
+        )}
       </div>
-    </div>
-  );
-}
-
-function ComingSoon({ title, text }: { title: string; text: string }) {
-  return (
-    <div className="panel-page">
-      <section className="card">
-        <h2>{title}</h2>
-        <p className="muted">{text}</p>
-        <p className="muted small">Planned for a later update of the roadmap — not part of this build yet.</p>
-      </section>
     </div>
   );
 }
