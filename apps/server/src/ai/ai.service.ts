@@ -12,6 +12,7 @@ import { env } from '../config/env';
 import { DB, Db } from '../db/db.module';
 import { buildings, campaigns, countries, provinces } from '../db/schema';
 import { AiWarService } from './ai-war.service';
+import { AiForcesService } from './ai-forces.service';
 import { BuildingsService } from '../buildings/buildings.service';
 import { EconomyService } from '../economy/economy.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -31,6 +32,7 @@ export class AiService {
     private readonly buildingsService: BuildingsService,
     private readonly realtime: RealtimeService,
     private readonly war: AiWarService,
+    private readonly forces: AiForcesService,
   ) {}
 
   /** Countries that were at war at their last decision. They decide more often. */
@@ -79,11 +81,13 @@ export class AiService {
       // War first: reinforce the front and counterattack.
       const war = await this.war.act(tx, country, balance);
       balance = war.balance;
+      const sky = await this.forces.act(tx, country, balance);
+      balance = sky.balance;
       if (war.atWar) this.atWar.add(countryId);
       else this.atWar.delete(countryId);
 
       const owned = await tx.select().from(provinces).where(eq(provinces.ownerCountryId, countryId));
-      if (owned.length === 0) return war.acted;
+      if (owned.length === 0) return war.acted || sky.acted;
       const blds = await tx
         .select()
         .from(buildings)
@@ -129,6 +133,11 @@ export class AiService {
         }
       }
       add(capital, 'fortress');
+      // At war the AI also wants an airbase (aircraft for patrols) and a harbour (ships and mines).
+      if (war.atWar) {
+        add(capital, 'airbase');
+        add(richest.find((p) => p.isCoastal), 'harbor');
+      }
 
       let started = 0;
       for (const w of wanted) {
@@ -144,7 +153,7 @@ export class AiService {
         typesIn.set(w.provinceId, set);
         started++;
       }
-      return started > 0 || war.acted;
+      return started > 0 || war.acted || sky.acted;
     });
   }
 }

@@ -238,50 +238,62 @@ export class MovementService {
     send?: Partial<Record<UnitType, number>>,
   ) {
     const player = await this.players.require(userId, campaignId);
-    const result = await this.economy.lock(player.countryId, async (tx, country) => {
-      const [formation] = await tx
-        .select()
-        .from(formations)
-        .where(and(eq(formations.id, formationId), eq(formations.campaignId, campaignId)))
-        .for('update');
-      if (!formation || formation.countryId !== country.id) throw new NotFoundException('Army not found');
-      if (formation.moveArrivesAt) throw new BadRequestException('Wait for the aircraft to land, or cancel their orders first');
-
-      const ctx = await this.loadContext(tx, campaignId);
-      const destKey = ctx.keyById.get(destinationProvinceId);
-      if (!destKey) throw new NotFoundException('Province not found');
-
-      let target: FormationRow = formation;
-      const unitRows = await tx.select().from(formationUnits).where(eq(formationUnits.formationId, formation.id));
-      let units: { unitType: UnitType; count: number }[] = unitRows;
-      if (send && Object.keys(send).length > 0) ({ target, units } = await this.split(tx, formation, unitRows, send));
-      if (!isAirFormation(units)) throw new BadRequestException('Only aircraft can patrol. Send the aircraft as a separate force.');
-
-      const startKey = ctx.keyById.get(target.provinceId)!;
-      if (patrolDistance(startKey, destKey) > PATROL_MAX_FLIGHT) throw new BadRequestException('Too far for these aircraft. Patrol closer to where they are based.');
-      const now = new Date();
-      if (startKey === destKey) {
-        await tx.update(formations).set({ patrolActive: true, patrolSince: now, patrolSettledAt: now, movePatrol: false }).where(eq(formations.id, target.id));
-        return { formationId: target.id, etaSeconds: 0 };
-      }
-      const seconds = patrolFlightSeconds(startKey, destKey, formationSpeed(units), env.GAME_SPEED);
-      await tx
-        .update(formations)
-        .set({
-          moveNextProvinceId: destinationProvinceId,
-          movePath: [],
-          moveStartedAt: now,
-          moveArrivesAt: new Date(now.getTime() + seconds * 1000),
-          movePatrol: true,
-          patrolActive: false,
-          patrolSince: null,
-          patrolSettledAt: null,
-        })
-        .where(eq(formations.id, target.id));
-      return { formationId: target.id, etaSeconds: seconds };
-    });
+    const result = await this.economy.lock(player.countryId, (tx, country) =>
+      this.orderPatrolFor(tx, country, campaignId, formationId, destinationProvinceId, send),
+    );
     this.realtime.campaignUpdate(campaignId, { kind: 'move' });
     return { ok: true, ...result };
+  }
+
+  /** The core of a patrol order. Must run inside a lock on `country`. The AI uses it too. */
+  async orderPatrolFor(
+    tx: DbOrTx,
+    country: CountryRow,
+    campaignId: string,
+    formationId: string,
+    destinationProvinceId: string,
+    send?: Partial<Record<UnitType, number>>,
+  ): Promise<{ formationId: string; etaSeconds: number }> {
+    const [formation] = await tx
+      .select()
+      .from(formations)
+      .where(and(eq(formations.id, formationId), eq(formations.campaignId, campaignId)))
+      .for('update');
+    if (!formation || formation.countryId !== country.id) throw new NotFoundException('Army not found');
+    if (formation.moveArrivesAt) throw new BadRequestException('Wait for the aircraft to land, or cancel their orders first');
+
+    const ctx = await this.loadContext(tx, campaignId);
+    const destKey = ctx.keyById.get(destinationProvinceId);
+    if (!destKey) throw new NotFoundException('Province not found');
+
+    let target: FormationRow = formation;
+    const unitRows = await tx.select().from(formationUnits).where(eq(formationUnits.formationId, formation.id));
+    let units: { unitType: UnitType; count: number }[] = unitRows;
+    if (send && Object.keys(send).length > 0) ({ target, units } = await this.split(tx, formation, unitRows, send));
+    if (!isAirFormation(units)) throw new BadRequestException('Only aircraft can patrol. Send the aircraft as a separate force.');
+
+    const startKey = ctx.keyById.get(target.provinceId)!;
+    if (patrolDistance(startKey, destKey) > PATROL_MAX_FLIGHT) throw new BadRequestException('Too far for these aircraft. Patrol closer to where they are based.');
+    const now = new Date();
+    if (startKey === destKey) {
+      await tx.update(formations).set({ patrolActive: true, patrolSince: now, patrolSettledAt: now, movePatrol: false }).where(eq(formations.id, target.id));
+      return { formationId: target.id, etaSeconds: 0 };
+    }
+    const seconds = patrolFlightSeconds(startKey, destKey, formationSpeed(units), env.GAME_SPEED);
+    await tx
+      .update(formations)
+      .set({
+        moveNextProvinceId: destinationProvinceId,
+        movePath: [],
+        moveStartedAt: now,
+        moveArrivesAt: new Date(now.getTime() + seconds * 1000),
+        movePatrol: true,
+        patrolActive: false,
+        patrolSince: null,
+        patrolSettledAt: null,
+      })
+      .where(eq(formations.id, target.id));
+    return { formationId: target.id, etaSeconds: seconds };
   }
 
   /**

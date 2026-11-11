@@ -16,4 +16,5 @@ export * from './diplomacy';
 export * from './air';
 export * from './patrol';
 export * from './naval';
+export * from './ai-forces';
 export * from './ai-war';

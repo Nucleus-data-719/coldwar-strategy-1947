@@ -8,6 +8,7 @@ import { EconomyService } from './economy/economy.service';
 import { FeedbackController } from './feedback/feedback.controller';
 import { GeneralsService } from './generals/generals.service';
 import { AiWarService } from './ai/ai-war.service';
+import { AiForcesService } from './ai/ai-forces.service';
 import { DiplomacyService } from './diplomacy/diplomacy.service';
 import { ResearchService } from './research/research.service';
 import { CapitalService } from './capital/capital.service';
@@ -38,6 +39,7 @@ import { WarsService } from './wars/wars.service';
     GeneralsService,
     DiplomacyService,
     AiWarService,
+    AiForcesService,
     MovementService,
     PatrolService,
     NavalService,

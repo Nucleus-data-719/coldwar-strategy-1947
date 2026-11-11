@@ -9,7 +9,7 @@ import { playSfx } from '../../services/audio';
  * Progress is remembered per campaign in the browser.
  */
 
-export type StepId = 'select' | 'build' | 'recruit' | 'move' | 'war' | 'capture';
+export type StepId = 'select' | 'build' | 'recruit' | 'move' | 'war' | 'capture' | 'air' | 'sea';
 
 interface StepDef {
   id: StepId;
@@ -17,6 +17,8 @@ interface StepDef {
   how: string;
   /** Label of the "Show me" button, if the game can lead the player there. */
   show?: string;
+  /** Advanced orders: offered once the basics are done, and never block them. */
+  optional?: boolean;
 }
 
 const STEPS: StepDef[] = [
@@ -40,7 +42,7 @@ const STEPS: StepDef[] = [
   {
     id: 'move',
     title: 'Send an army',
-    how: 'Click an army figure on the map to select it, then right-click a province to send it there (or press "Move / Attack…" and click the destination). Land forces follow the roads. The route is previewed; confirm and watch the army march along the dashed line.',
+    how: 'Click an army figure on the map: an order bar appears at the bottom with Move, Attack, Waypoint, Delay and Cancel Orders. Press Move and click a province (or just right-click one). Land forces follow the roads. Confirm, then hover over the army to see its route as a blue line with white dashes ending in an arrow.',
   },
   {
     id: 'war',
@@ -52,6 +54,18 @@ const STEPS: StepDef[] = [
     id: 'capture',
     title: 'Capture an enemy province',
     how: 'Move an army into an enemy province. The battle resolves in rounds; if you win and no defenders remain, the province is yours. A captured province produces nothing for a while.',
+  },
+  {
+    id: 'air',
+    title: 'Patrol with aircraft',
+    optional: true,
+    how: 'Research Fighters, build an Airbase, and produce aircraft. Select the aircraft, press Move, switch the panel to Patrol and click a province. They circle there and wear down enemy armies and buildings inside the circle (they take some losses over enemy land).',
+  },
+  {
+    id: 'sea',
+    title: 'Send a fleet to sea',
+    optional: true,
+    how: 'Build a Harbor on the coast and produce ships. Select the fleet and press Sail, then right-click open ocean to sail there, or right-click a red enemy fleet to attack. Destroyers and corvettes find submarines and can lay mines.',
   },
 ];
 
@@ -124,6 +138,8 @@ export function Tutorial({ campaignId, state, hasSelected, onShow, open, onOpenC
     move: state.formations.some((f) => f.movement !== null),
     war: state.atWarWith.length > 0,
     capture: mineProvinces.length > saved.startProvinces,
+    air: state.formations.some((f) => !!f.patrol || !!f.movement?.patrol),
+    sea: state.formations.some((f) => !!f.sea),
   };
 
   // Steps stay ticked once done, even if the situation later changes.
@@ -135,7 +151,7 @@ export function Tutorial({ campaignId, state, hasSelected, onShow, open, onOpenC
     save(campaignId, next);
     playSfx('research');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detected.select, detected.build, detected.recruit, detected.move, detected.war, detected.capture]);
+  }, [detected.select, detected.build, detected.recruit, detected.move, detected.war, detected.capture, detected.air, detected.sea]);
 
   // Open/closed state of the card lives with the game page, so the top-bar help button can reopen it.
   useEffect(() => {
@@ -148,8 +164,9 @@ export function Tutorial({ campaignId, state, hasSelected, onShow, open, onOpenC
   }, [open]);
 
   const done = new Set(saved.done);
-  const current = STEPS.find((s) => !done.has(s.id));
-  const finished = !current;
+  const core = STEPS.filter((s) => !s.optional);
+  const finished = core.every((s) => done.has(s.id));
+  const current = core.find((s) => !done.has(s.id)) ?? STEPS.find((s) => !done.has(s.id));
   const hidden = saved.dismissed || !open;
   if (hidden) return null;
 
@@ -171,7 +188,7 @@ export function Tutorial({ campaignId, state, hasSelected, onShow, open, onOpenC
         <button className="tutorial-title ghost" onClick={() => setCollapsed(!saved.collapsed)}>
           <Icon name="star" size={16} /> Orders from HQ
           <span className="tutorial-count">
-            {done.size}/{STEPS.length}
+            {core.filter((s) => done.has(s.id)).length}/{core.length}
           </span>
         </button>
         <button className="ghost icon small" aria-label="Close tutorial" onClick={dismiss}>
@@ -181,7 +198,7 @@ export function Tutorial({ campaignId, state, hasSelected, onShow, open, onOpenC
       {!saved.collapsed && (
         <div className="tutorial-body">
           <div className="bar">
-            <i style={{ width: `${(done.size / STEPS.length) * 100}%` }} />
+            <i style={{ width: `${(core.filter((s) => done.has(s.id)).length / core.length) * 100}%` }} />
           </div>
           <ol className="tutorial-steps">
             {STEPS.map((s) => {
@@ -209,7 +226,7 @@ export function Tutorial({ campaignId, state, hasSelected, onShow, open, onOpenC
           </ol>
           {finished && (
             <p className="small pos">
-              You have captured a province. From here: research new technology, recruit generals, make allies. Re-open this guide any time with the ? button.
+              You have captured a province. Optional steps below teach air patrols and fleets. From here: research new technology, recruit generals, make allies. Re-open this guide any time with the ? button.
             </p>
           )}
         </div>

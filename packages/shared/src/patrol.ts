@@ -91,7 +91,7 @@ export function patrolHour(units: Units, s: PatrolSituation): PatrolHour {
   const groundLossPct = s.enemyGroundUnits > 0 ? Math.min(0.12, (sum(units, GROUND_WEIGHT) / 12000) * spread) : 0;
   const bombs = sum(units, BUILDING_WEIGHT);
   const buildingPoints = s.enemyBuildings > 0 ? Math.min(15, bombs / (40 * s.enemyBuildings)) : 0;
-  const flak = Math.min(0.1, 0.004 * s.enemyProvinces + 0.0005 * s.enemyGroundUnits * (s.enemyProvinces > 0 ? 1 : 0));
+  const flak = Math.min(0.08, 0.003 * s.enemyProvinces + 0.0003 * s.enemyGroundUnits * (s.enemyProvinces > 0 ? 1 : 0));
   const own = airPower(units);
   let dogfightOwn = 0;
   let enemyAirLossPct = 0;

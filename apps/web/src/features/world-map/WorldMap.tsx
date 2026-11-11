@@ -3,6 +3,7 @@ import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, type
 import { unitArtUrls } from '../../components/unit-art';
 import { TOKEN_BOTTOM, TOKEN_HALF_WIDTH, TOKEN_TOP, drawToken, formationClass } from './army-token';
 import { drawResourceIcon, resourceIconsFor } from './resource-icons';
+import { BADGE, BADGE_GAP, drawBadge, drawBadgeOverlay, type BadgeSpec } from './building-icons';
 import { JUMP, legPolyline, routePolyline, splitAt } from './route-geometry';
 import type { Point } from '@cw/shared';
 import {
@@ -20,6 +21,7 @@ import {
   type EnemyFleetDto,
   type FormationDto,
   type SeaMineDto,
+  BUILDINGS,
   type StateCountry,
   type StateProvince,
 } from '@cw/shared';
@@ -129,10 +131,18 @@ interface Shape {
   icons: Container | null;
 }
 
+/** The row of building badges standing on one province. */
+interface BuildingRow {
+  box: Container;
+  sig: string;
+  items: { overlay: Graphics; spec: BadgeSpec; startedAt: number; completesAt: number }[];
+}
+
 interface Ctx {
   app: Application;
   world: Container;
   shapes: Map<string, Shape>;
+  bRows: Map<string, BuildingRow>;
   dispose: () => void;
 }
 
@@ -492,6 +502,74 @@ export function WorldMap({
           shapes.get(geo.key)!.icons = row;
         }
 
+        // Buildings: a badge for each one, standing on its province. Click opens the province; the progress bar of
+        // a building under construction fills in real time.
+        const bRows = new Map<string, BuildingRow>();
+        const bLayer = new Container();
+        world.addChild(bLayer);
+        for (const geo of PROVINCES) {
+          const box = new Container();
+          box.eventMode = 'static';
+          box.cursor = 'pointer';
+          box.visible = false;
+          box.on('pointertap', (e) => {
+            e.stopPropagation();
+            if (!dragMoved.current) onSelectRef.current(geo.key);
+          });
+          box.on('rightclick', () => onOrderRef.current?.(geo.key));
+          bLayer.addChild(box);
+          bRows.set(geo.key, { box, sig: '', items: [] });
+        }
+        // Tooltip for building badges (screen space, above everything).
+        const tip = new Container();
+        tip.visible = false;
+        tip.eventMode = 'none';
+        const tipBg = new Graphics();
+        const tipText = new Text({ text: '', style: { fontSize: 12, fill: 0xffffff, fontFamily: 'sans-serif', lineHeight: 15 } });
+        tipText.position.set(7, 4);
+        tip.addChild(tipBg, tipText);
+        app.stage.addChild(tip);
+        for (const [key, row] of bRows) {
+          row.box.on('pointermove', (e) => {
+            const local = row.box.toLocal(e.global);
+            const n = row.items.length;
+            if (n === 0) return;
+            const total = n * BADGE + (n - 1) * BADGE_GAP;
+            const i = Math.min(n - 1, Math.max(0, Math.floor((local.x + total / 2) / (BADGE + BADGE_GAP))));
+            const it = row.items[i];
+            const def = BUILDINGS[it.spec.type];
+            const lines = [def.name];
+            if (it.spec.constructing) lines.push(`Under construction: ${Math.round(Math.min(1, Math.max(0, it.spec.progress)) * 100)}%`);
+            else if (it.spec.damage >= 50) lines.push(`Knocked out by bombing (${Math.round(it.spec.damage)}% damage). Repairs 1% per game hour.`);
+            else if (it.spec.damage > 0) lines.push(`Bomb damage ${Math.round(it.spec.damage)}% (stops working at 50%)`);
+            else lines.push(def.description.length > 90 ? def.description.slice(0, 88) + '…' : def.description);
+            lines.push(PROVINCE_BY_KEY[key]?.name ?? '');
+            tipText.text = lines.join('\n');
+            tipBg.clear();
+            tipBg.roundRect(0, 0, tipText.width + 14, tipText.height + 8, 4).fill({ color: 0x101b27, alpha: 0.95 }).stroke({ width: 1, color: 0x35506a });
+            tip.position.set(Math.min(e.global.x + 14, app.screen.width - tipText.width - 24), e.global.y + 14);
+            tip.visible = true;
+          });
+          row.box.on('pointerout', () => {
+            tip.visible = false;
+          });
+        }
+        let lastProgress = 0;
+        app.ticker.add(() => {
+          const t = Date.now();
+          if (t - lastProgress < 1000) return;
+          lastProgress = t;
+          const now = t + offsetRef.current;
+          for (const row of bRows.values()) {
+            for (const it of row.items) {
+              if (!it.spec.constructing) continue;
+              const span = it.completesAt - it.startedAt;
+              it.spec.progress = span > 0 ? (now - it.startedAt) / span : 1;
+              drawBadgeOverlay(it.overlay, it.spec);
+            }
+          }
+        });
+
         // Keep labels a readable size at every zoom, and only show detail when zoomed in.
         let lastScale = -1;
         const syncLabels = () => {
@@ -504,6 +582,12 @@ export function WorldMap({
             icons.visible = sc >= 0.9;
             icons.scale.set(0.9 / sc);
             icons.position.set(geo.center.x, geo.center.y - 15 / sc);
+          }
+          for (const geo of PROVINCES) {
+            const row = bRows.get(geo.key)!;
+            row.box.visible = sc >= 0.9 && row.items.length > 0;
+            row.box.scale.set(0.9 / sc);
+            row.box.position.set(geo.center.x, geo.center.y - 38 / sc);
           }
           for (const { label, nameLabel } of shapes.values()) {
             label.visible = sc >= 0.7;
@@ -906,6 +990,7 @@ export function WorldMap({
           app,
           world,
           shapes,
+          bRows,
           dispose: () => {
             resizeObserver.disconnect();
             app.ticker.remove(drawArmies);
@@ -979,15 +1064,52 @@ export function WorldMap({
           color: selected ? 0xffffff : mine ? 0xffe27a : enemy ? 0xe5483f : 0x0b1d2e,
         });
 
+      // Building badges.
+      const row = ctx.bRows.get(geo.key);
+      if (row) {
+        const ownerColor = colorById.get(st.ownerCountryId) ?? 0x888888;
+        const list = st.buildings.slice(0, 7);
+        const sig = `${ownerColor}|${list.map((b) => `${b.type}:${b.status}:${Math.round(b.damage / 5)}:${b.completesAt}`).join(',')}`;
+        if (row.sig !== sig) {
+          row.sig = sig;
+          for (const c of row.box.removeChildren()) c.destroy({ children: true });
+          row.items = [];
+          const n = list.length;
+          const total = n * BADGE + (n - 1) * BADGE_GAP;
+          const sc = ctx.world.scale.x;
+          list.forEach((b, i) => {
+            const spec: BadgeSpec = {
+              type: b.type,
+              constructing: b.status === 'constructing',
+              damage: b.damage,
+              progress: 0,
+              ownerColor,
+            };
+            const startedAt = Date.parse(b.startedAt);
+            const completesAt = Date.parse(b.completesAt);
+            spec.progress = completesAt > startedAt ? (Date.now() + clockOffsetMs - startedAt) / (completesAt - startedAt) : 1;
+            const holder = new Container();
+            holder.position.set(-total / 2 + BADGE / 2 + i * (BADGE + BADGE_GAP), 0);
+            const plate = new Graphics();
+            drawBadge(plate, spec);
+            const overlay = new Graphics();
+            drawBadgeOverlay(overlay, spec);
+            holder.addChild(plate, overlay);
+            row.box.addChild(holder);
+            row.items.push({ overlay, spec, startedAt, completesAt });
+          });
+          if (n > 0) row.box.hitArea = new Rectangle(-total / 2, -BADGE / 2, total, BADGE);
+          row.box.visible = sc >= 0.9 && n > 0;
+          row.box.scale.set(0.9 / sc);
+          row.box.position.set(geo.center.x, geo.center.y - 38 / sc);
+        }
+      }
+
       if (mode !== 'resources') drawTerrainMarks(shape.g, geo.polygon, geo.terrain, geo.key.length * 7919 + geo.key.charCodeAt(0));
 
       const parts: string[] = [];
       if (capitalKeys.has(geo.key)) parts.push('★');
       if (st.unitCount > 0) parts.push(`⚔${st.unitCount}`);
-      const done = st.buildings.filter((b) => b.status === 'complete').length;
-      const building = st.buildings.length - done;
-      if (done > 0) parts.push(`▣${done}`);
-      if (building > 0) parts.push(`⏳${building}`);
       shape.label.text = parts.join(' ');
     }
   }, [ready, provinces, countries, myCountryId, mode, atWarWith, selectedKey, relationByCountry, supplyShort]);

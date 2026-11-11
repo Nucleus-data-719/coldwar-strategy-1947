@@ -68,3 +68,20 @@ describe('air patrol', () => {
     expect(patrolFlightSeconds('washington', 'chicago', 1, 60)).toBeGreaterThan(patrolFlightSeconds('washington', 'chicago', 4, 60));
   });
 });
+
+describe('patrol balance guard rails (24 game hours over an enemy province with 30 enemy units)', () => {
+  const sit = { enemyGroundUnits: 30, enemyArmies: 2, enemyProvinces: 1, enemyAirPower: 0, enemyBuildings: 2 };
+  it('five bombers do real damage but lose less than they inflict', () => {
+    const h = patrolHour([{ unitType: 'bomber', count: 5 }], sit);
+    const enemyLoss = overHours(h.groundLossPct, 24);
+    const ownLoss = overHours(h.ownLossPct, 24);
+    expect(enemyLoss > 0.15 && enemyLoss < 0.5).toBe(true);
+    expect(ownLoss < 0.3).toBe(true);
+    expect(ownLoss < enemyLoss + 0.05).toBe(true);
+  });
+  it('fighters are a poor ground attacker', () => {
+    const f = patrolHour([{ unitType: 'fighter', count: 5 }], sit);
+    const b = patrolHour([{ unitType: 'bomber', count: 5 }], sit);
+    expect(f.groundLossPct < b.groundLossPct / 3).toBe(true);
+  });
+});

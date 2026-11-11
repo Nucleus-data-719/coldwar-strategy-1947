@@ -278,3 +278,15 @@ All 11 unit images are already included (cut out of your JPGs). To replace one, 
 - **Route lines**: every moving army has a thin steel-blue line with an arrow at its destination. Hover or select an army and its line turns into a wider blue track with white dashes marching to the arrow.
 - **Roads** are now very faint; **railways** are drawn Supremacy-style: a thin outline, closely spaced dark ties and two light rails, so they are clearly not roads.
 - Not included: Loadout and Rush (skipped as requested).
+
+## Week 15: buildings on the map, AI air and sea, tutorial, balance
+No database changes. Restart the server.
+
+- **Buildings drawn on provinces.** Every building is a small badge with its own pictogram (factory, tent, gear, anchor, plane, flask, columns, tower, rails) above its province, outlined in the owner's colour. Under construction: faint pictogram, gold frame and a progress bar that fills in real time. Bombed: a red damage bar; at 50% a red cross (knocked out, repairs 1% per game hour). Hover for a tooltip (name, progress or damage, effect), click to open the province, right-click to give the selected army an order there. Shown from medium zoom in; the old ▣/⏳ counters are gone.
+- **AI air force and navy** (only while an AI country is at war). It builds an Airbase and a Harbor, buys a few aircraft and ships at full price (it ignores research; capped at about 2 + half its provinces in aircraft, 1 + a third in ships), then:
+  - sends aircraft to patrol over the biggest enemy army in reach (at least ~3 infantry of power inside the circle) and calls the patrol off when the enemy leaves;
+  - attacks enemy fleets it can see and is at least 1.3x stronger than, sails mine-layers two steps off its own harbour, lays mines, and returns to port;
+  - land attacks already follow roads and railways through the normal movement system.
+- **Tutorial:** the Move step now explains the order bar and route lines; two optional "advanced" steps (air patrol, fleet at sea) appear after the basics and do not block finishing.
+- **Balance pass** (numbers in `patrol.ts`, `naval.ts`, checked by new guard-rail tests): air defence over enemy land lowered (5 bombers over a 30-unit enemy now lose about a quarter of their number per game day and destroy about a quarter of the enemy, instead of losing 37%); mine damage per field lowered to 3% of the fleet per strength point, capped at 25% (was 4%, 35%).
+- Known gaps: AI does not research; AI fleets do not protect transports (there are none yet); the AI never takes ships on hunts beyond 8 steps.

@@ -128,90 +128,99 @@ export class NavalService {
   /** Sail to one of your harbours (`toProvinceId`) or to any open-sea dot (`toNode`). */
   async sail(userId: string, campaignId: string, formationId: string, dest: { toProvinceId?: string; toNode?: number }, send?: Partial<Record<UnitType, number>>) {
     const player = await this.players.require(userId, campaignId);
-    const result = await this.economy.lock(player.countryId, async (tx, country) => {
-      const f = await this.loadOwn(tx, country, campaignId, formationId);
-      const { keyById } = await this.keys(tx, campaignId);
-      const { target, units } = await this.pick(tx, f, send);
-      let destProvince: string | null = null;
-      let goal: number;
-      if (dest.toProvinceId) {
-        const key = keyById.get(dest.toProvinceId);
-        if (!key) throw new NotFoundException('Province not found');
-        if (!hasPort(key)) throw new BadRequestException(`${nameOf(key)} has no coast to sail to.`);
-        const [p] = await tx.select({ owner: provinces.ownerCountryId }).from(provinces).where(eq(provinces.id, dest.toProvinceId));
-        if (p.owner !== country.id) throw new BadRequestException('Fleets can only enter your own harbours. Use the attack order against enemy ships.');
-        destProvince = dest.toProvinceId;
-        const from = target.seaNode !== null ? currentNode(target) : undefined;
-        const ports = portNodes(key);
-        const sorted = from === undefined ? ports : [...ports].sort((a, b) => (seaPathNodes(from, a)?.length ?? 1e9) - (seaPathNodes(from, b)?.length ?? 1e9));
-        goal = sorted[0];
-      } else if (dest.toNode !== undefined) {
-        goal = dest.toNode;
-      } else throw new BadRequestException('Choose where to sail.');
-      const start = this.startNode(target, keyById, goal);
-      const path = seaPathNodes(start, goal);
-      if (!path) throw new BadRequestException('No sea route there.');
-      if (path.length === 1 && !destProvince) throw new BadRequestException('The fleet is already there.');
-      const eta = await this.setVoyage(tx, target, path, units, destProvince, null);
-      return { formationId: target.id, etaSeconds: eta };
-    });
+    const result = await this.economy.lock(player.countryId, (tx, country) => this.sailFor(tx, country, campaignId, formationId, dest, send));
     this.realtime.campaignUpdate(campaignId, { kind: 'move' });
     return { ok: true, ...result };
+  }
+
+  /** Core of the order; runs inside a lock on `country`. The AI uses it too. */
+  async sailFor(tx: DbOrTx, country: CountryRow, campaignId: string, formationId: string, dest: { toProvinceId?: string; toNode?: number }, send?: Partial<Record<UnitType, number>>) {
+    const f = await this.loadOwn(tx, country, campaignId, formationId);
+    const { keyById } = await this.keys(tx, campaignId);
+    const { target, units } = await this.pick(tx, f, send);
+    let destProvince: string | null = null;
+    let goal: number;
+    if (dest.toProvinceId) {
+      const key = keyById.get(dest.toProvinceId);
+      if (!key) throw new NotFoundException('Province not found');
+      if (!hasPort(key)) throw new BadRequestException(`${nameOf(key)} has no coast to sail to.`);
+      const [p] = await tx.select({ owner: provinces.ownerCountryId }).from(provinces).where(eq(provinces.id, dest.toProvinceId));
+      if (p.owner !== country.id) throw new BadRequestException('Fleets can only enter your own harbours. Use the attack order against enemy ships.');
+      destProvince = dest.toProvinceId;
+      const from = target.seaNode !== null ? currentNode(target) : undefined;
+      const ports = portNodes(key);
+      const sorted = from === undefined ? ports : [...ports].sort((a, b) => (seaPathNodes(from, a)?.length ?? 1e9) - (seaPathNodes(from, b)?.length ?? 1e9));
+      goal = sorted[0];
+    } else if (dest.toNode !== undefined) {
+      goal = dest.toNode;
+    } else throw new BadRequestException('Choose where to sail.');
+    const start = this.startNode(target, keyById, goal);
+    const path = seaPathNodes(start, goal);
+    if (!path) throw new BadRequestException('No sea route there.');
+    if (path.length === 1 && !destProvince) throw new BadRequestException('The fleet is already there.');
+    const eta = await this.setVoyage(tx, target, path, units, destProvince, null);
+    return { formationId: target.id, etaSeconds: eta };
   }
 
   /** Attack a visible enemy fleet at sea. The fleet closes in until all its ships are within range, then fires. */
   async attack(userId: string, campaignId: string, formationId: string, targetId: string, send?: Partial<Record<UnitType, number>>) {
     const player = await this.players.require(userId, campaignId);
-    const result = await this.economy.lock(player.countryId, async (tx, country) => {
-      const f = await this.loadOwn(tx, country, campaignId, formationId);
-      const { keyById } = await this.keys(tx, campaignId);
-      const [enemy] = await tx.select().from(formations).where(and(eq(formations.id, targetId), eq(formations.campaignId, campaignId)));
-      if (!enemy || enemy.seaNode === null) throw new BadRequestException('That fleet is no longer at sea.');
-      const atWar = await this.wars.enemiesOf(tx, country.id);
-      if (!atWar.has(enemy.countryId)) throw new BadRequestException('You are not at war with that country.');
-      const view = await this.seaView(tx, campaignId, country.id, keyById);
-      if (!view.enemies.some((e) => e.id === enemy.id)) throw new BadRequestException('You cannot see that fleet. Get a destroyer or corvette closer to find it.');
-      const { target, units } = await this.pick(tx, f, send);
-      const tpos = currentNode(enemy);
-      const start = this.startNode(target, keyById, tpos);
-      const path = seaPathNodes(start, tpos);
-      if (!path) throw new BadRequestException('No sea route to that fleet.');
-      const course = firingPosition(path, tpos, fleetRange(units));
-      const eta = await this.setVoyage(tx, target, course, units, null, enemy.id);
-      return { formationId: target.id, etaSeconds: eta };
-    });
+    const result = await this.economy.lock(player.countryId, (tx, country) => this.attackFor(tx, country, campaignId, formationId, targetId, send));
     this.realtime.campaignUpdate(campaignId, { kind: 'move' });
     return { ok: true, ...result };
+  }
+
+  /** Core of the order; runs inside a lock on `country`. The AI uses it too. */
+  async attackFor(tx: DbOrTx, country: CountryRow, campaignId: string, formationId: string, targetId: string, send?: Partial<Record<UnitType, number>>) {
+    const f = await this.loadOwn(tx, country, campaignId, formationId);
+    const { keyById } = await this.keys(tx, campaignId);
+    const [enemy] = await tx.select().from(formations).where(and(eq(formations.id, targetId), eq(formations.campaignId, campaignId)));
+    if (!enemy || enemy.seaNode === null) throw new BadRequestException('That fleet is no longer at sea.');
+    const atWar = await this.wars.enemiesOf(tx, country.id);
+    if (!atWar.has(enemy.countryId)) throw new BadRequestException('You are not at war with that country.');
+    const view = await this.seaView(tx, campaignId, country.id, keyById);
+    if (!view.enemies.some((e) => e.id === enemy.id)) throw new BadRequestException('You cannot see that fleet. Get a destroyer or corvette closer to find it.');
+    const { target, units } = await this.pick(tx, f, send);
+    const tpos = currentNode(enemy);
+    const start = this.startNode(target, keyById, tpos);
+    const path = seaPathNodes(start, tpos);
+    if (!path) throw new BadRequestException('No sea route to that fleet.');
+    const course = firingPosition(path, tpos, fleetRange(units));
+    const eta = await this.setVoyage(tx, target, course, units, null, enemy.id);
+    return { formationId: target.id, etaSeconds: eta };
   }
 
   /** Lay a mine field on the dot the fleet is sitting at. Submarines, destroyers and corvettes can do it. */
   async layMines(userId: string, campaignId: string, formationId: string) {
     const player = await this.players.require(userId, campaignId);
-    const result = await this.economy.lock(player.countryId, async (tx, country) => {
-      const f = await this.loadOwn(tx, country, campaignId, formationId);
-      if (f.seaNode === null) throw new BadRequestException('Mines are laid at sea. Sail out first.');
-      if (f.seaArrivesAt) throw new BadRequestException('Stop the fleet before laying mines.');
-      const units = (await tx.select().from(formationUnits).where(eq(formationUnits.formationId, f.id))) as Units;
-      const layers = minelayerCount(units);
-      if (layers <= 0) throw new BadRequestException('Only submarines, destroyers and corvettes can lay mines.');
-      const balance = await this.economy.settle(tx, country);
-      const cost: Partial<Resources> = {};
-      for (const [k, v] of Object.entries(MINE_COST_PER_SHIP)) cost[k as keyof Resources] = (v as number) * layers;
-      const next = { ...balance };
-      for (const [k, v] of Object.entries(cost)) {
-        if (balance[k as keyof Resources] < (v as number)) throw new BadRequestException(`Not enough ${k} to lay mines (${v} needed).`);
-        next[k as keyof Resources] = balance[k as keyof Resources] - (v as number);
-      }
-      await this.economy.writeBalance(tx, country.id, next);
-      const expiresAt = new Date(Date.now() + ((MINE_LIFETIME_HOURS * 3600) / env.GAME_SPEED) * 1000);
-      const [existing] = await tx.select().from(seaMines).where(and(eq(seaMines.campaignId, campaignId), eq(seaMines.countryId, country.id), eq(seaMines.node, f.seaNode)));
-      const add = layers * MINE_STRENGTH_PER_SHIP;
-      if (existing) await tx.update(seaMines).set({ strength: Math.min(MINE_MAX_STRENGTH, existing.strength + add), expiresAt }).where(eq(seaMines.id, existing.id));
-      else await tx.insert(seaMines).values({ campaignId, countryId: country.id, node: f.seaNode, strength: Math.min(MINE_MAX_STRENGTH, add), expiresAt });
-      return { strength: Math.min(MINE_MAX_STRENGTH, (existing?.strength ?? 0) + add) };
-    });
+    const result = await this.economy.lock(player.countryId, (tx, country) => this.layMinesFor(tx, country, campaignId, formationId));
     this.realtime.campaignUpdate(campaignId, { kind: 'move' });
     return { ok: true, ...result };
+  }
+
+  /** Core of the order; runs inside a lock on `country`. The AI uses it too. */
+  async layMinesFor(tx: DbOrTx, country: CountryRow, campaignId: string, formationId: string) {
+    const f = await this.loadOwn(tx, country, campaignId, formationId);
+    if (f.seaNode === null) throw new BadRequestException('Mines are laid at sea. Sail out first.');
+    if (f.seaArrivesAt) throw new BadRequestException('Stop the fleet before laying mines.');
+    const units = (await tx.select().from(formationUnits).where(eq(formationUnits.formationId, f.id))) as Units;
+    const layers = minelayerCount(units);
+    if (layers <= 0) throw new BadRequestException('Only submarines, destroyers and corvettes can lay mines.');
+    const balance = await this.economy.settle(tx, country);
+    const cost: Partial<Resources> = {};
+    for (const [k, v] of Object.entries(MINE_COST_PER_SHIP)) cost[k as keyof Resources] = (v as number) * layers;
+    const next = { ...balance };
+    for (const [k, v] of Object.entries(cost)) {
+      if (balance[k as keyof Resources] < (v as number)) throw new BadRequestException(`Not enough ${k} to lay mines (${v} needed).`);
+      next[k as keyof Resources] = balance[k as keyof Resources] - (v as number);
+    }
+    await this.economy.writeBalance(tx, country.id, next);
+    const expiresAt = new Date(Date.now() + ((MINE_LIFETIME_HOURS * 3600) / env.GAME_SPEED) * 1000);
+    const [existing] = await tx.select().from(seaMines).where(and(eq(seaMines.campaignId, campaignId), eq(seaMines.countryId, country.id), eq(seaMines.node, f.seaNode)));
+    const add = layers * MINE_STRENGTH_PER_SHIP;
+    if (existing) await tx.update(seaMines).set({ strength: Math.min(MINE_MAX_STRENGTH, existing.strength + add), expiresAt }).where(eq(seaMines.id, existing.id));
+    else await tx.insert(seaMines).values({ campaignId, countryId: country.id, node: f.seaNode, strength: Math.min(MINE_MAX_STRENGTH, add), expiresAt });
+    return { strength: Math.min(MINE_MAX_STRENGTH, (existing?.strength ?? 0) + add) };
   }
 
   /** Cancel orders. A fleet at sea stops where it is; anything else falls back to the land/air rules. */

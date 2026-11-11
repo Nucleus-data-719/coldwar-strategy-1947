@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEA_RANGE, fleetRange, navalEngagement, hopsFrom, seaPathNodes, isHiddenFleet, minelayerCount, nearestSeaNode, firingPosition } from './naval';
+import { mineLossPct, SEA_RANGE, fleetRange, navalEngagement, hopsFrom, seaPathNodes, isHiddenFleet, minelayerCount, nearestSeaNode, firingPosition } from './naval';
 import { SEA_DOTS, seaNeighbors } from './map-data';
 
 describe('naval ranges', () => {
@@ -45,5 +45,12 @@ describe('naval engagement', () => {
       navalEngagement({ seed: 2, attackerUnits: [{ unitType: t, count: n }], defenderUnits: sub, hops: 0 }).defenderLossPct;
     // 2 battleships weigh 640 hp, 6 destroyers 660 hp: similar mass, destroyers should do better vs subs
     expect(one('destroyer', 6) > one('battleship', 2)).toBe(true);
+  });
+});
+
+describe('balance guard rails', () => {
+  it('mines hurt but never wipe out a fleet', () => {
+    expect(mineLossPct(3) > 0).toBe(true);
+    expect(mineLossPct(20) <= 0.25).toBe(true);
   });
 });

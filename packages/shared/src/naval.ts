@@ -28,7 +28,7 @@ export const MINE_MAX_STRENGTH = 20;
 export const MINE_STRENGTH_PER_SHIP = 3;
 export const MINE_COST_PER_SHIP: PartialResources = { money: 10, steel: 20 };
 /** Share of an enemy fleet lost to a field of this strength, per crossing. */
-export const mineLossPct = (strength: number): number => Math.min(0.35, 0.04 * strength);
+export const mineLossPct = (strength: number): number => Math.min(0.25, 0.03 * strength);
 
 export const isNavalUnits = (units: Units): boolean =>
   units.some((u) => u.count > 0) && units.every((u) => u.count <= 0 || UNITS[u.unitType].category === 'naval');
