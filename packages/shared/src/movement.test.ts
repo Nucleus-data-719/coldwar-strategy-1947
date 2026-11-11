@@ -23,9 +23,9 @@ describe('movement', () => {
   });
 
   it('routes through own provinces only', () => {
-    const route = planRoute('washington', 'kansas_city', baseCtx)!;
+    const route = planRoute('washington', 'st_louis', baseCtx)!;
     expect(route.path[0]).toBe('washington');
-    expect(route.path.at(-1)).toBe('kansas_city');
+    expect(route.path.at(-1)).toBe('st_louis');
     expect(route.path.length).toBeGreaterThan(2);
     expect(route.legSeconds.length).toBe(route.path.length - 1);
     for (const key of route.path) expect(usa.get(key)).toBe(ME);
@@ -36,9 +36,9 @@ describe('movement', () => {
   });
 
   it('railways halve a leg and faster units arrive sooner', () => {
-    const slow = planRoute('washington', 'kansas_city', baseCtx)!;
-    const fast = planRoute('washington', 'kansas_city', { ...baseCtx, speed: 2 })!;
-    const rail = planRoute('washington', 'kansas_city', { ...baseCtx, railwayKeys: new Set(slow.path) })!;
+    const slow = planRoute('washington', 'st_louis', baseCtx)!;
+    const fast = planRoute('washington', 'st_louis', { ...baseCtx, speed: 2 })!;
+    const rail = planRoute('washington', 'st_louis', { ...baseCtx, railwayKeys: new Set(slow.path) })!;
     expect(fast.totalSeconds).toBeLessThan(slow.totalSeconds * 0.6);
     expect(rail.totalSeconds).toBeLessThan(slow.totalSeconds * 0.6);
   });
@@ -48,7 +48,7 @@ describe('movement', () => {
   });
 
   it('applies several finished legs after being offline, without drifting', () => {
-    const route = planRoute('washington', 'kansas_city', baseCtx)!;
+    const route = planRoute('washington', 'st_louis', baseCtx)!;
     const start = 1_000_000;
     const firstArrive = start + route.legSeconds[0] * 1000;
     const input = {
@@ -80,7 +80,7 @@ describe('movement', () => {
   });
 
   it('stops when the next province is no longer ours', () => {
-    const route = planRoute('washington', 'kansas_city', baseCtx)!;
+    const route = planRoute('washington', 'st_louis', baseCtx)!;
     const lost = new Map(usa);
     lost.set(route.path[2], THEM);
     const result = advanceMovement({

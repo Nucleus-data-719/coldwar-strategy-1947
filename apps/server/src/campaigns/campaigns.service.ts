@@ -74,13 +74,17 @@ export class CampaignsService implements OnModuleInit {
   ) {}
 
   /** Campaigns made on an older map (any province key that no longer exists) cannot be played any more. */
+  private legacyCache: Set<string> | null = null;
   private async legacyCampaignIds(): Promise<Set<string>> {
+    // Whether a campaign is on an older map never changes while the server runs, and the check sends thousands of keys, so ask once.
+    if (this.legacyCache) return this.legacyCache;
     const current = PROVINCES.map((p) => p.key);
     const rows = await this.db
       .selectDistinct({ id: provinces.campaignId })
       .from(provinces)
       .where(notInArray(provinces.key, current));
-    return new Set(rows.map((r) => r.id));
+    this.legacyCache = new Set(rows.map((r) => r.id));
+    return this.legacyCache;
   }
 
   /** Makes sure there is always a playable campaign to join on a fresh database. */
@@ -89,7 +93,7 @@ export class CampaignsService implements OnModuleInit {
       const legacy = await this.legacyCampaignIds();
       if (legacy.size > 0) {
         this.log.warn(
-          `${legacy.size} campaign(s) were made on an older map and are hidden. Delete them with the SQL in docs/map-rebalance.sql.`,
+          `${legacy.size} campaign(s) were made on an older map and are hidden. Delete them with the SQL in docs/map-rebuild.sql.`,
         );
       }
       const existing = (await this.db.select({ id: campaigns.id }).from(campaigns)).filter((c) => !legacy.has(c.id));

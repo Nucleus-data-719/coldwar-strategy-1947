@@ -7,7 +7,7 @@ export interface ResourceIconSpec {
   doubled: boolean;
 }
 
-/** A province with a deposit gets one icon; a doubled region also gets a gold ring and x2. */
+/** A city shows the icon of its resource; a deposit province gets a gold ring and x2. */
 export function resourceIconsFor(geo: ProvinceGeo): ResourceIconSpec[] {
   return geo.deposit ? [{ kind: geo.deposit, doubled: geo.doubled }] : [];
 }
@@ -27,13 +27,24 @@ export function drawResourceIcon(g: Graphics, kind: ResourceKey, x: number, doub
       g.poly([x - 4, -3.5, x + 4, -3.5, x + 3, -1, x - 3, -1]).fill(0xdde4ec);
       break;
     case 'electronics':
-      g.poly([x + 1.5, -7, x - 4, 1, x - 0.5, 1, x - 1.5, 7, x + 4, -1.5, x + 0.5, -1.5])
-        .fill(0xffd54a)
-        .stroke({ width: 0.8, color: 0x7a5d00 });
+      // a green microchip
+      g.roundRect(x - 4.5, -4.5, 9, 9, 1.5).fill(0x3ddc84).stroke({ width: 0.8, color: 0x0f5a32 });
+      g.roundRect(x - 2, -2, 4, 4, 0.6).fill(0x0f5a32);
+      for (const d of [-3, 0, 3]) {
+        g.poly([x + d, -4.5, x + d, -6.5]).stroke({ width: 0.9, color: 0xbfe9d0 });
+        g.poly([x + d, 4.5, x + d, 6.5]).stroke({ width: 0.9, color: 0xbfe9d0 });
+      }
       break;
     case 'rare':
-      g.poly([x, -6.5, x + 5, -1, x, 6.5, x - 5, -1]).fill(0xb36bff).stroke({ width: 0.8, color: 0xf0d9ff });
-      g.poly([x - 5, -1, x, -6.5, x + 5, -1, x, 0]).fill(0xd8b4ff);
+      // orange crystal: rare earth
+      g.poly([x, -6.5, x + 5, -1, x, 6.5, x - 5, -1]).fill(0xff8a1f).stroke({ width: 0.8, color: 0xffe0b8 });
+      g.poly([x - 5, -1, x, -6.5, x + 5, -1, x, 0]).fill(0xffc277);
+      break;
+    case 'wood':
+      g.roundRect(x - 5.5, -2.5, 11, 5, 2.5).fill(0xb5783a).stroke({ width: 0.8, color: 0x5a3716 });
+      g.roundRect(x - 5.5, 3, 11, 4, 2).fill(0xa06a32).stroke({ width: 0.8, color: 0x5a3716 });
+      g.roundRect(x - 4.5, -7, 9, 4, 2).fill(0xc88a4a).stroke({ width: 0.8, color: 0x5a3716 });
+      g.circle(x + 3.2, 0, 1).fill(0x5a3716);
       break;
     case 'money':
       g.circle(x, 0, 5).fill(0xf2c14e).stroke({ width: 0.8, color: 0x8a6a10 });

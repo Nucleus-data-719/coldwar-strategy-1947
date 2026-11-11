@@ -5,6 +5,7 @@ export const RESOURCE_KEYS = [
   'steel',
   'electronics',
   'rare',
+  'wood',
   'manpower',
 ] as const;
 export type ResourceKey = (typeof RESOURCE_KEYS)[number];
@@ -17,12 +18,13 @@ export const RESOURCE_LABELS: Record<ResourceKey, string> = {
   oil: 'Oil',
   steel: 'Steel',
   electronics: 'Electronics',
-  rare: 'Rare materials',
+  rare: 'Rare earth',
+  wood: 'Wood',
   manpower: 'Manpower',
 };
 
 export function emptyResources(): Resources {
-  return { money: 0, food: 0, oil: 0, steel: 0, electronics: 0, rare: 0, manpower: 0 };
+  return { money: 0, food: 0, oil: 0, steel: 0, electronics: 0, rare: 0, wood: 0, manpower: 0 };
 }
 
 export const TERRAINS = ['plains', 'forest', 'hills', 'mountains', 'desert'] as const;

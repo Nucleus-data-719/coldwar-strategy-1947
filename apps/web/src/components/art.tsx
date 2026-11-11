@@ -318,6 +318,166 @@ const FLAGS: Record<string, FlagArt> = {
       <circle cx={W / 2} cy={H / 2} r="5.6" fill="#bc002d" />
     </>
   ),
+  // Canada, 1947: the Red Ensign.
+  CAN: () => (
+    <>
+      <rect width={W} height={H} fill="#c8102e" />
+      <rect width="14" height="9.5" fill="#012169" />
+      <path d="M0 0L14 9.5M14 0L0 9.5" stroke="#fff" strokeWidth="1.8" />
+      <path d="M7 0V9.5M0 4.75H14" stroke="#fff" strokeWidth="3" />
+      <path d="M7 0V9.5M0 4.75H14" stroke="#c8102e" strokeWidth="1.6" />
+      <circle cx="22" cy="13" r="3" fill="#f2f2f2" opacity="0.9" />
+    </>
+  ),
+  // Australia: Blue Ensign with the Southern Cross.
+  AUS: () => (
+    <>
+      <rect width={W} height={H} fill="#00247d" />
+      <rect width="14" height="9.5" fill="#012169" />
+      <path d="M0 0L14 9.5M14 0L0 9.5" stroke="#fff" strokeWidth="1.8" />
+      <path d="M7 0V9.5M0 4.75H14" stroke="#fff" strokeWidth="3" />
+      <path d="M7 0V9.5M0 4.75H14" stroke="#c8102e" strokeWidth="1.6" />
+      {star(22, 6, 1.5, '#fff')}{star(25.5, 10.5, 1.4, '#fff')}{star(22, 15, 1.5, '#fff')}{star(18.5, 10.5, 1.4, '#fff')}{star(7, 15, 2.2, '#fff')}
+    </>
+  ),
+  ARG: () => (
+    <>
+      {stripesH(['#74acdf', '#ffffff', '#74acdf'])}
+      <circle cx={W / 2} cy={H / 2} r="2.6" fill="#f6b40e" />
+    </>
+  ),
+  MEX: () => (
+    <>
+      {stripesV(['#006847', '#ffffff', '#ce1126'])}
+      <circle cx={W / 2} cy={H / 2} r="2.8" fill="#8c6b3e" />
+    </>
+  ),
+  IDN: () => <>{stripesH(['#ce1126', '#ffffff'])}</>,
+  // Germany, 1947: no state flag; the black-red-gold of the republic.
+  GER: () => <>{stripesH(['#000000', '#dd0000', '#ffce00'])}</>,
+  ITA: () => <>{stripesV(['#009246', '#ffffff', '#ce2b37'])}</>,
+  ESP: () => (
+    <>
+      <rect width={W} height={H} fill="#aa151b" />
+      <rect y={H / 4} width={W} height={H / 2} fill="#f1bf00" />
+      <rect x="6" y="7.5" width="3.4" height="5" fill="#aa151b" opacity="0.8" />
+    </>
+  ),
+  NOR: () => (
+    <>
+      <rect width={W} height={H} fill="#ba0c2f" />
+      <rect x="8" width="6" height={H} fill="#fff" />
+      <rect y="7" width={W} height="6" fill="#fff" />
+      <rect x="9.6" width="2.8" height={H} fill="#00205b" />
+      <rect y="8.6" width={W} height="2.8" fill="#00205b" />
+    </>
+  ),
+  FIN: () => (
+    <>
+      <rect width={W} height={H} fill="#fff" />
+      <rect x="8" width="4.4" height={H} fill="#003580" />
+      <rect y="7.8" width={W} height="4.4" fill="#003580" />
+    </>
+  ),
+  ROU: () => <>{stripesV(['#002b7f', '#fcd116', '#ce1126'])}</>,
+  YUG: () => (
+    <>
+      {stripesH(['#0c4076', '#ffffff', '#c6363c'])}
+      {star(W / 2, H / 2, 3.2, '#c6363c')}
+    </>
+  ),
+  CZE: () => (
+    <>
+      {stripesH(['#ffffff', '#d7141a'])}
+      <polygon points={`0,0 ${W / 2},${H / 2} 0,${H}`} fill="#11457e" />
+    </>
+  ),
+  IRN: () => (
+    <>
+      {stripesH(['#239f40', '#ffffff', '#da0000'])}
+      <circle cx={W / 2} cy={H / 2} r="2.6" fill="#f6b40e" />
+    </>
+  ),
+  // Iraq, 1947: kingdom flag with the red triangle and two stars.
+  IRQ: () => (
+    <>
+      {stripesH(['#000000', '#ffffff', '#007a3d'])}
+      <polygon points={`0,0 ${W * 0.38},${H / 2} 0,${H}`} fill="#ce1126" />
+      {star(4, 7.4, 1.4, '#fff')}{star(4, 12.6, 1.4, '#fff')}
+    </>
+  ),
+  SAU: () => (
+    <>
+      <rect width={W} height={H} fill="#006c35" />
+      <rect x="7" y="6.4" width="16" height="1.8" rx="0.9" fill="#fff" />
+      <rect x="7" y="13" width="16" height="1" fill="#fff" />
+    </>
+  ),
+  PAK: () => (
+    <>
+      <rect width={W} height={H} fill="#01411c" />
+      <rect width="7.5" height={H} fill="#fff" />
+      <circle cx="19" cy="10" r="4.4" fill="#fff" />
+      <circle cx="20.4" cy="9.2" r="3.7" fill="#01411c" />
+      {star(22.4, 7.6, 1.6, '#fff')}
+    </>
+  ),
+  // South Africa, 1928: orange, white, blue.
+  ZAF: () => (
+    <>
+      {stripesH(['#e05d13', '#ffffff', '#1b3a8c'])}
+      <rect x="11" y="7.8" width="2.4" height="4.4" fill="#e05d13" />
+      <rect x="14.2" y="8.2" width="2.4" height="3.6" fill="#c8102e" />
+    </>
+  ),
+  KOR: () => (
+    <>
+      <rect width={W} height={H} fill="#fff" />
+      <path d={`M${W / 2 - 4} ${H / 2}a4 4 0 0 1 8 0z`} fill="#cd2e3a" />
+      <path d={`M${W / 2 - 4} ${H / 2}a4 4 0 0 0 8 0z`} fill="#0047a0" />
+      <path d="M4 3.6l3-1.8M3 5.4l3-1.8M23 16.4l3 1.8M24 14.6l3 1.8" stroke="#000" strokeWidth="0.9" />
+    </>
+  ),
+  THA: () => <>{stripesH(['#a51931', '#f4f5f8', '#2d2a4a', '#2d2a4a', '#f4f5f8', '#a51931'])}</>,
+  MMR: () => (
+    <>
+      <rect width={W} height={H} fill="#bf0a30" />
+      <rect width="13" height="10" fill="#002868" />
+      {star(6.5, 5, 3, '#fff')}
+    </>
+  ),
+  PHL: () => (
+    <>
+      {stripesH(['#0038a8', '#ce1126'])}
+      <polygon points={`0,0 ${W * 0.42},${H / 2} 0,${H}`} fill="#fff" />
+      <circle cx="4.6" cy="10" r="1.8" fill="#fcd116" />
+    </>
+  ),
+  VNM: () => (
+    <>
+      <rect width={W} height={H} fill="#fcd116" />
+      <rect y="6" width={W} height="1.6" fill="#da251d" />
+      <rect y="9.2" width={W} height="1.6" fill="#da251d" />
+      <rect y="12.4" width={W} height="1.6" fill="#da251d" />
+    </>
+  ),
+  ETH: () => <>{stripesH(['#078930', '#fcdd09', '#da121a'])}</>,
+  COL: () => (
+    <>
+      <rect width={W} height={H / 2} fill="#fcd116" />
+      <rect y={H / 2} width={W} height={H / 4} fill="#003893" />
+      <rect y={H * 0.75} width={W} height={H / 4} fill="#ce1126" />
+    </>
+  ),
+  CHL: () => (
+    <>
+      {stripesH(['#ffffff', '#d52b1e'])}
+      <rect width="10" height="10" fill="#0039a6" />
+      {star(5, 5, 3, '#fff')}
+    </>
+  ),
+  PER: () => <>{stripesV(['#d91023', '#ffffff', '#d91023'])}</>,
+  VEN: () => <>{stripesH(['#ffcc00', '#00247d', '#cf142b'])}</>,
 };
 
 /** Deterministic number from a country code, to vary the emblem banners. */

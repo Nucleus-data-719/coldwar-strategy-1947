@@ -50,6 +50,7 @@ const resourceColumns = {
   steel: doublePrecision('steel').notNull().default(0),
   electronics: doublePrecision('electronics').notNull().default(0),
   rare: doublePrecision('rare').notNull().default(0),
+  wood: doublePrecision('wood').notNull().default(0),
   manpower: doublePrecision('manpower').notNull().default(0),
 };
 

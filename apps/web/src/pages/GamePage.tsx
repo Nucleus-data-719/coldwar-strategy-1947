@@ -41,7 +41,7 @@ const DRAWER_TABS: { id: DrawerTab; label: string }[] = [
   { id: 'alerts', label: 'Alerts' },
 ];
 
-const ZERO = { money: 0, food: 0, oil: 0, steel: 0, electronics: 0, rare: 0, manpower: 0 };
+const ZERO = { money: 0, food: 0, oil: 0, steel: 0, electronics: 0, rare: 0, wood: 0, manpower: 0 };
 
 interface Props {
   campaignId: string;

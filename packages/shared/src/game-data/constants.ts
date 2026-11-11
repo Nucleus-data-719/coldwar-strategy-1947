@@ -7,6 +7,7 @@ export const STARTING_RESOURCES: Resources = {
   steel: 1000,
   electronics: 100,
   rare: 50,
+  wood: 400,
   manpower: 20000,
 };
 

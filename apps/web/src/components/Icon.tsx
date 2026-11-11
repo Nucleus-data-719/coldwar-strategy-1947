@@ -127,13 +127,28 @@ export function ResourceIcon({ kind, size = 22 }: { kind: ResourceKey; size?: nu
       );
       break;
     case 'electronics':
-      shape = <path d="M1.5 -7.5 L-4.2 1 L-0.6 1 L-1.6 7.5 L4.2 -1.6 L0.6 -1.6 Z" fill="#ffd54a" stroke="#7a5d00" strokeWidth="0.9" />;
+      shape = (
+        <>
+          <rect x="-5" y="-5" width="10" height="10" rx="1.6" fill="#3ddc84" stroke="#0f5a32" strokeWidth="0.9" />
+          <rect x="-2.2" y="-2.2" width="4.4" height="4.4" rx="0.6" fill="#0f5a32" />
+          <path d="M-3 -5 V-7 M0 -5 V-7 M3 -5 V-7 M-3 5 V7 M0 5 V7 M3 5 V7" stroke="#bfe9d0" strokeWidth="1" />
+        </>
+      );
       break;
     case 'rare':
       shape = (
         <>
-          <path d="M0 -7 L5.3 -1 L0 7 L-5.3 -1 Z" fill="#b36bff" stroke="#f0d9ff" strokeWidth="0.9" />
-          <path d="M-5.3 -1 L0 -7 L5.3 -1 L0 0 Z" fill="#d8b4ff" />
+          <path d="M0 -7 L5.3 -1 L0 7 L-5.3 -1 Z" fill="#ff8a1f" stroke="#ffe0b8" strokeWidth="0.9" />
+          <path d="M-5.3 -1 L0 -7 L5.3 -1 L0 0 Z" fill="#ffc277" />
+        </>
+      );
+      break;
+    case 'wood':
+      shape = (
+        <>
+          <rect x="-6" y="-7.5" width="12" height="4.4" rx="2.2" fill="#c88a4a" stroke="#5a3716" strokeWidth="0.9" />
+          <rect x="-6" y="-2.4" width="12" height="4.8" rx="2.4" fill="#b5783a" stroke="#5a3716" strokeWidth="0.9" />
+          <rect x="-6" y="3.1" width="12" height="4.4" rx="2.2" fill="#a06a32" stroke="#5a3716" strokeWidth="0.9" />
         </>
       );
       break;

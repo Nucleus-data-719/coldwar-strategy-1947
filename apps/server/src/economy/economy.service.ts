@@ -28,6 +28,7 @@ export function rowToResources(row: CountryRow): Resources {
     steel: row.steel,
     electronics: row.electronics,
     rare: row.rare,
+    wood: row.wood,
     manpower: row.manpower,
   };
 }

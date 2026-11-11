@@ -86,13 +86,13 @@ describe('roads', () => {
 
   it('ships sail along the sea dots from port to port', () => {
     expect(SEA_DOTS.length).toBeGreaterThan(500);
-    const route = seaRoute('new_york', 'london')!;
+    const route = seaRoute('new_york', 'liverpool')!;
     expect(route).not.toBeNull();
     expect(route.points.length).toBeGreaterThan(4);
     const owner = new Map(PROVINCES.map((p) => [p.key, 'me']));
     const ctx = { countryId: 'me', ownerByKey: owner, atWarWith: new Set<string>(), railwayKeys: new Set<string>(), speed: 1, gameSpeed: 1, coastalOnly: true };
-    const plan = planRoute('new_york', 'london', ctx)!;
-    expect(plan.path).toEqual(['new_york', 'london']);
+    const plan = planRoute('new_york', 'liverpool', ctx)!;
+    expect(plan.path).toEqual(['new_york', 'liverpool']);
     expect(plan.totalSeconds).toBeGreaterThan(3600);
     expect(hasPort('chicago')).toBe(false);
     expect(planRoute('new_york', 'chicago', ctx)).toBeNull();

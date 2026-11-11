@@ -38,7 +38,7 @@ export function spend(balance: Resources, cost: PartialResources): Resources {
 }
 
 /** Industry boosts these. Food and manpower come from the land and its people, not from factories. */
-export const INDUSTRIAL_RESOURCES: ResourceKey[] = ['money', 'oil', 'steel', 'electronics', 'rare'];
+export const INDUSTRIAL_RESOURCES: ResourceKey[] = ['money', 'oil', 'steel', 'electronics', 'rare', 'wood'];
 
 /** Hourly production of one province, including completed buildings. */
 export function provinceProduction(base: Resources, buildings: BuildingLike[]): Resources {

@@ -50,9 +50,9 @@ describe('rules', () => {
 });
 
 describe('map data', () => {
-  it('has 150-250 provinces, each country owns some, and one capital per country', () => {
-    expect(PROVINCES.length).toBeGreaterThan(149);
-    expect(PROVINCES.length).toBeLessThan(251);
+  it('has 2000 to 3000 provinces, each country owns some, and one capital per country', () => {
+    expect(PROVINCES.length).toBeGreaterThan(1999);
+    expect(PROVINCES.length).toBeLessThan(3001);
     for (const c of COUNTRIES) {
       const owned = PROVINCES.filter((p) => p.countryCode === c.code);
       expect(owned.length).toBeGreaterThan(0);
@@ -69,14 +69,19 @@ describe('map data', () => {
     for (const p of PROVINCES) expect(p.polygon.length).toBeGreaterThan(5);
   });
 
-  it('the whole map is one connected world', () => {
-    const seen = new Set<string>([PROVINCES[0].key]);
-    const stack = [PROVINCES[0].key];
+  it('land and ferries join the map into a few big landmasses, and almost every province is on a big one', () => {
     const byKey = new Map(PROVINCES.map((p) => [p.key, p]));
-    while (stack.length) {
-      for (const n of byKey.get(stack.pop()!)!.adjacent) if (!seen.has(n)) { seen.add(n); stack.push(n); }
+    const seen = new Set<string>();
+    const groups: number[] = [];
+    for (const p of PROVINCES) {
+      if (seen.has(p.key)) continue;
+      let n = 0; const stack = [p.key]; seen.add(p.key);
+      while (stack.length) { const k = stack.pop()!; n++; for (const a of byKey.get(k)!.adjacent) if (!seen.has(a)) { seen.add(a); stack.push(a); } }
+      groups.push(n);
     }
-    expect(seen.size).toBe(PROVINCES.length);
+    groups.sort((a, b) => b - a);
+    expect(groups[0] > PROVINCES.length * 0.4).toBe(true); // Eurasia and Africa
+    expect(groups.length < 15).toBe(true);
   });
 
   it('adjacency is symmetric', () => {

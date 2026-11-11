@@ -128,7 +128,7 @@ export function DiplomacyPanel({ campaignId, state }: { campaignId: string; stat
               {aidFor === c.countryId && (
                 <div className="manage">
                   <div className="row small">
-                    {(['money', 'food', 'oil', 'steel', 'electronics', 'rare'] as const).map((k) => (
+                    {(['money', 'food', 'oil', 'steel', 'electronics', 'rare', 'wood'] as const).map((k) => (
                       <label key={k}>
                         {k}{' '}
                         <input

@@ -20,6 +20,7 @@ import {
   seaRange,
   type EnemyFleetDto,
   type FormationDto,
+  type ProvinceGeo,
   type SeaMineDto,
   BUILDINGS,
   type StateCountry,
@@ -58,14 +59,15 @@ export const TERRAIN_COLORS: Record<string, number> = {
 export const RESOURCE_COLORS: Record<string, number> = {
   oil: 0x8b5a2b,
   steel: 0x7a8ea3,
-  electronics: 0x4fc3f7,
-  rare: 0xc06be0,
+  electronics: 0x3ddc84,
+  rare: 0xff8a1f,
+  wood: 0xb5783a,
   food: 0x9acd32,
   money: 0xf0c040,
   manpower: 0xd9534f,
 };
 
-const RESOURCE_WEIGHT: Record<string, number> = { oil: 3, steel: 2.5, electronics: 8, rare: 10, food: 0.8, money: 1, manpower: 0.5 };
+const RESOURCE_WEIGHT: Record<string, number> = { oil: 3, steel: 2.5, electronics: 8, rare: 10, wood: 2, food: 0.8, money: 1, manpower: 0.5 };
 
 export function dominantResource(key: string): string {
   const prod = PROVINCE_BY_KEY[key].production as unknown as Record<string, number>;
@@ -125,8 +127,13 @@ interface Props {
 
 interface Shape {
   g: Graphics;
-  label: Text;
-  nameLabel: Text;
+  /** Capital star and army count. Created only for provinces that have something to say. */
+  label: Text | null;
+  /** The province name, created the first time it is zoomed in on. */
+  nameLabel: Text | null;
+  /** What the polygon was last drawn with, so unchanged provinces are not redrawn. */
+  sig: string;
+  labelText: string;
   /** Small resource icons (oil, steel, ...). Doubled deposits get a gold ring and x2. */
   icons: Container | null;
 }
@@ -143,6 +150,7 @@ interface Ctx {
   world: Container;
   shapes: Map<string, Shape>;
   bRows: Map<string, BuildingRow>;
+  makeLabel: (geo: ProvinceGeo, shape: Shape) => Text;
   dispose: () => void;
 }
 
@@ -348,7 +356,7 @@ export function WorldMap({
           });
           g.on('rightclick', () => onOrderRef.current?.(geo.key));
           world.addChild(g);
-          shapes.set(geo.key, { g, label: null as unknown as Text, nameLabel: null as unknown as Text, icons: null });
+          shapes.set(geo.key, { g, label: null, nameLabel: null, icons: null, sig: '', labelText: '' });
         }
         // Roads: land forces travel only along these. They run through the border crossing of the two provinces,
         // never across open water. Highways run out of capitals; ferries follow the sea dots. Kept faint so they
@@ -441,23 +449,26 @@ export function WorldMap({
           seaG.visible = (!!sel && formationClass(sel.units) === 'naval') || !!previewNavalRef.current;
         });
 
-        // Labels are added after all shapes so neighbours never paint over them.
-        for (const geo of PROVINCES) {
+        // Labels are added after all shapes so neighbours never paint over them. With over two thousand provinces they are
+        // created only when they are needed: the army count of a province with an army, and names of provinces in view.
+        const labelLayer = new Container();
+        labelLayer.eventMode = 'none';
+        world.addChild(labelLayer);
+        const makeLabel = (geo: ProvinceGeo, shape: Shape): Text => {
           const label = new Text({
-            text: '',
-            style: {
-              fontSize: 13,
-              fill: 0xffffff,
-              fontFamily: 'sans-serif',
-              stroke: { color: 0x000000, width: 3 },
-            },
+            text: shape.labelText,
+            style: { fontSize: 13, fill: 0xffffff, fontFamily: 'sans-serif', stroke: { color: 0x000000, width: 3 } },
           });
           label.anchor.set(0.5);
           label.position.set(geo.center.x, geo.center.y);
           label.eventMode = 'none';
-          world.addChild(label);
-          shapes.get(geo.key)!.label = label;
-
+          label.scale.set(0.9 / world.scale.x);
+          label.visible = world.scale.x >= 0.7;
+          labelLayer.addChild(label);
+          shape.label = label;
+          return label;
+        };
+        const makeName = (geo: ProvinceGeo, shape: Shape): Text => {
           const nameLabel = new Text({
             text: geo.name,
             style: { fontSize: 11, fill: 0xe8eef5, fontFamily: 'sans-serif', stroke: { color: 0x000000, width: 3 } },
@@ -465,13 +476,12 @@ export function WorldMap({
           nameLabel.anchor.set(0.5, 0);
           nameLabel.position.set(geo.center.x, geo.center.y + 8);
           nameLabel.eventMode = 'none';
-          nameLabel.visible = false;
-          world.addChild(nameLabel);
-          shapes.get(geo.key)!.nameLabel = nameLabel;
-        }
+          labelLayer.addChild(nameLabel);
+          shape.nameLabel = nameLabel;
+          return nameLabel;
+        };
 
-        // Resource icons: oil, steel, electronics and rare materials wherever the province produces them,
-        // and any resource that is a doubled hot spot.
+        // Resource icons: the resource of every city and every deposit province (deposits are ringed and marked x2).
         for (const geo of PROVINCES) {
           const kinds = resourceIconsFor(geo);
           if (kinds.length === 0) continue;
@@ -570,31 +580,37 @@ export function WorldMap({
           }
         });
 
-        // Keep labels a readable size at every zoom, and only show detail when zoomed in.
-        let lastScale = -1;
+        // Keep labels a readable size at every zoom, and only show detail when zoomed in, and only for what is on screen.
+        let lastScale = -1, viewX = NaN, viewY = NaN;
         const syncLabels = () => {
           const sc = world.scale.x;
-          if (sc === lastScale) return;
-          lastScale = sc;
+          const px = world.position.x, py = world.position.y;
+          if (sc === lastScale && px === viewX && py === viewY) return;
+          lastScale = sc; viewX = px; viewY = py;
+          const x0 = -px / sc - 60, x1 = (app.screen.width - px) / sc + 60;
+          const y0 = -py / sc - 60, y1 = (app.screen.height - py) / sc + 60;
           for (const geo of PROVINCES) {
-            const icons = shapes.get(geo.key)!.icons;
-            if (!icons) continue;
-            icons.visible = sc >= 0.9;
-            icons.scale.set(0.9 / sc);
-            icons.position.set(geo.center.x, geo.center.y - 15 / sc);
-          }
-          for (const geo of PROVINCES) {
+            const shape = shapes.get(geo.key)!;
+            const cx = geo.center.x, cy = geo.center.y;
+            const inView = cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1;
+            const icons = shape.icons;
+            if (icons) {
+              icons.visible = sc >= 0.9 && inView;
+              if (icons.visible) { icons.scale.set(0.9 / sc); icons.position.set(cx, cy - 15 / sc); }
+            }
             const row = bRows.get(geo.key)!;
-            row.box.visible = sc >= 0.9 && row.items.length > 0;
-            row.box.scale.set(0.9 / sc);
-            row.box.position.set(geo.center.x, geo.center.y - 38 / sc);
-          }
-          for (const { label, nameLabel } of shapes.values()) {
-            label.visible = sc >= 0.7;
-            label.scale.set(0.9 / sc);
-            nameLabel.visible = sc >= 1.5;
-            nameLabel.scale.set(0.85 / sc);
-            nameLabel.position.y = label.position.y + 7 / sc;
+            row.box.visible = sc >= 0.9 && inView && row.items.length > 0;
+            if (row.box.visible) { row.box.scale.set(0.9 / sc); row.box.position.set(cx, cy - 38 / sc); }
+            if (shape.label) {
+              shape.label.visible = sc >= 0.7 && inView;
+              shape.label.scale.set(0.9 / sc);
+            }
+            if (sc >= 1.5 && inView) {
+              const nl = shape.nameLabel ?? makeName(geo, shape);
+              nl.visible = true;
+              nl.scale.set(0.85 / sc);
+              nl.position.y = cy + 7 / sc;
+            } else if (shape.nameLabel) shape.nameLabel.visible = false;
           }
         };
         app.ticker.add(syncLabels);
@@ -991,6 +1007,7 @@ export function WorldMap({
           world,
           shapes,
           bRows,
+          makeLabel,
           dispose: () => {
             resizeObserver.disconnect();
             app.ticker.remove(drawArmies);
@@ -1035,6 +1052,11 @@ export function WorldMap({
       const selected = selectedKey === geo.key;
       const enemy = atWarSet.has(st.ownerCountryId);
 
+      const stage = mode === 'diplomacy' ? stageLabel(relationByCountry?.[st.ownerCountryId]) : '';
+      const supplyBits = mode === 'supply' ? `${st.unitCount > 0 ? 1 : 0}${supplyShort ? 1 : 0}` : '';
+      const sig = `${mode}|${st.ownerCountryId}|${mine ? 1 : 0}${selected ? 1 : 0}${enemy ? 1 : 0}|${stage}|${supplyBits}`;
+      if (shape.sig !== sig) {
+      shape.sig = sig;
       shape.g.clear();
       shape.g
         .poly(geo.polygon)
@@ -1106,11 +1128,17 @@ export function WorldMap({
       }
 
       if (mode !== 'resources') drawTerrainMarks(shape.g, geo.polygon, geo.terrain, geo.key.length * 7919 + geo.key.charCodeAt(0));
+      }
 
       const parts: string[] = [];
       if (capitalKeys.has(geo.key)) parts.push('★');
       if (st.unitCount > 0) parts.push(`⚔${st.unitCount}`);
-      shape.label.text = parts.join(' ');
+      const text = parts.join(' ');
+      if (text !== shape.labelText) {
+        shape.labelText = text;
+        if (shape.label) shape.label.text = text;
+        else if (text) ctx.makeLabel(geo, shape);
+      }
     }
   }, [ready, provinces, countries, myCountryId, mode, atWarWith, selectedKey, relationByCountry, supplyShort]);
 

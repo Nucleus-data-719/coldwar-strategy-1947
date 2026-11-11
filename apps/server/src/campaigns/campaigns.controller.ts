@@ -51,6 +51,7 @@ const assistSchema = z.object({
       steel: z.number().int().min(0).max(1_000_000).optional(),
       electronics: z.number().int().min(0).max(1_000_000).optional(),
       rare: z.number().int().min(0).max(1_000_000).optional(),
+      wood: z.number().int().min(0).max(1_000_000).optional(),
     })
     .strict(),
 });

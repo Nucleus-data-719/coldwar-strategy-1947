@@ -1,143 +1,33 @@
 import type { ResourceKey, Resources, Terrain } from './types';
 import { emptyResources } from './types';
-import { GENERATED_PROVINCES, GENERATED_ROADS, GENERATED_SEA, MAP_HEIGHT, MAP_WIDTH } from './map-geometry.generated';
+import { GENERATED_COUNTRIES, GENERATED_PROVINCES, GENERATED_ROADS, GENERATED_SEA, MAP_HEIGHT, MAP_WIDTH } from './map-geometry.generated';
+import type { GeneratedResource } from './map-geometry.generated';
+
+export type CountryTier = 'super' | 'major' | 'medium' | 'minor';
 
 export interface CountryDef {
   code: string;
   name: string;
   color: string;
   playable: boolean;
+  /** superpower, major (50 to 65 provinces), medium (35 to 50) or minor (AI countries). */
+  tier: CountryTier;
   capitalName: string;
   blurb: string;
   startBonus?: Partial<Resources>;
 }
 
-export const COUNTRIES: CountryDef[] = [
-  {
-    code: 'USA',
-    name: 'United States',
-    color: '#3b6fd8',
-    playable: true,
-    capitalName: 'Washington',
-    blurb: 'Strong economy and industrial capacity.',
-    startBonus: { money: 3000, steel: 800, electronics: 60 },
-  },
-  {
-    code: 'SOV',
-    name: 'Soviet Union',
-    color: '#c63d3d',
-    playable: true,
-    capitalName: 'Moscow',
-    blurb: 'Vast land, large manpower pool and rich natural resources.',
-    startBonus: { manpower: 15000, oil: 600, steel: 600 },
-  },
-  {
-    code: 'GBR',
-    name: 'United Kingdom',
-    color: '#8e4fc4',
-    playable: true,
-    capitalName: 'London',
-    blurb: 'Wealthy trading power with overseas interests.',
-    startBonus: { money: 2000, electronics: 40 },
-  },
-  {
-    code: 'FRA',
-    name: 'France',
-    color: '#2fa4c8',
-    playable: true,
-    capitalName: 'Paris',
-    blurb: 'Industrial base at the centre of Europe.',
-    startBonus: { money: 1000, steel: 500 },
-  },
-  {
-    code: 'CHN',
-    name: 'China',
-    color: '#d9a62e',
-    playable: true,
-    capitalName: 'Nanjing',
-    blurb: 'Enormous population, limited industry.',
-    startBonus: { manpower: 20000, food: 1500 },
-  },
-  {
-    code: 'IND',
-    name: 'India',
-    color: '#e07a2d',
-    playable: true,
-    capitalName: 'Delhi',
-    blurb: 'Large population and growing economy.',
-    startBonus: { manpower: 12000, food: 1500 },
-  },
-  {
-    code: 'TUR',
-    name: 'Turkey',
-    color: '#4aa86b',
-    playable: true,
-    capitalName: 'Ankara',
-    blurb: 'Strategic crossroads between Europe and Asia.',
-    startBonus: { money: 800, oil: 200 },
-  },
-  {
-    code: 'BRA',
-    name: 'Brazil',
-    color: '#7fbf3f',
-    playable: true,
-    capitalName: 'Rio de Janeiro',
-    blurb: 'Rich in food and raw materials.',
-    startBonus: { food: 2000, rare: 40 },
-  },
-  {
-    code: 'POL',
-    name: 'Poland',
-    color: '#c46a8b',
-    playable: false,
-    capitalName: 'Warsaw',
-    blurb: 'AI-controlled regional power.',
-  },
-  {
-    code: 'EGY',
-    name: 'Egypt',
-    color: '#b79a5b',
-    playable: false,
-    capitalName: 'Cairo',
-    blurb: 'AI-controlled regional power.',
-  },
-  {
-    code: 'SWE',
-    name: 'Sweden',
-    color: '#5fb3d9',
-    playable: false,
-    capitalName: 'Stockholm',
-    blurb: 'AI-controlled neutral country.',
-  },
-  {
-    code: 'JPN',
-    name: 'Japan',
-    color: '#d96fa3',
-    playable: false,
-    capitalName: 'Tokyo',
-    blurb: 'AI-controlled regional power.',
-  },
-  { code: 'MEX', name: 'Mexico', color: '#6f9a3c', playable: false, capitalName: 'Mexico City', blurb: 'AI-controlled regional power (Mexico and Central America).' },
-  { code: 'CAN', name: 'Canada', color: '#a84a4a', playable: false, capitalName: 'Ottawa', blurb: 'AI-controlled northern dominion.' },
-  { code: 'COL', name: 'Andean States', color: '#c9803a', playable: false, capitalName: 'Bogota', blurb: 'AI-controlled northern South America.' },
-  { code: 'ARG', name: 'Southern Cone', color: '#6fa8c9', playable: false, capitalName: 'Buenos Aires', blurb: 'AI-controlled Argentina, Chile and Paraguay.' },
-  { code: 'NLD', name: 'Low Countries', color: '#e0894a', playable: false, capitalName: 'Amsterdam', blurb: 'AI-controlled Benelux.' },
-  { code: 'ESP', name: 'Iberia', color: '#c9b24a', playable: false, capitalName: 'Madrid', blurb: 'AI-controlled Spain and Portugal.' },
-  { code: 'GER', name: 'Germany', color: '#7a7a85', playable: false, capitalName: 'Berlin', blurb: 'AI-controlled central European power.' },
-  { code: 'CEN', name: 'Central Europe', color: '#9f7ab8', playable: false, capitalName: 'Vienna', blurb: 'AI-controlled Austria, Bohemia and Hungary.' },
-  { code: 'ITA', name: 'Italy', color: '#5fbf8f', playable: false, capitalName: 'Rome', blurb: 'AI-controlled Mediterranean power.' },
-  { code: 'BAL', name: 'Balkans', color: '#b85f5f', playable: false, capitalName: 'Belgrade', blurb: 'AI-controlled Balkan states.' },
-  { code: 'IRN', name: 'Iran', color: '#4a9f8f', playable: false, capitalName: 'Tehran', blurb: 'AI-controlled oil-rich highland state.' },
-  { code: 'MES', name: 'Levant and Iraq', color: '#a4678f', playable: false, capitalName: 'Baghdad', blurb: 'AI-controlled Middle Eastern states.' },
-  { code: 'SAU', name: 'Arabia', color: '#8fa84a', playable: false, capitalName: 'Riyadh', blurb: 'AI-controlled desert kingdoms.' },
-  { code: 'ETH', name: 'East Africa', color: '#7a8f5f', playable: false, capitalName: 'Khartoum', blurb: 'AI-controlled Sudan, Ethiopia and Kenya.' },
-  { code: 'MAR', name: 'Maghreb', color: '#b89a7a', playable: false, capitalName: 'Rabat', blurb: 'AI-controlled North Africa.' },
-  { code: 'NGA', name: 'West Africa', color: '#5f9fb8', playable: false, capitalName: 'Lagos', blurb: 'AI-controlled West African states.' },
-  { code: 'ZAF', name: 'Southern Africa', color: '#9f8f5f', playable: false, capitalName: 'Johannesburg', blurb: 'AI-controlled Southern and Central Africa.' },
-  { code: 'KOR', name: 'Korea', color: '#8f7ab8', playable: false, capitalName: 'Seoul', blurb: 'AI-controlled Korean peninsula.' },
-  { code: 'PAK', name: 'Pakistan', color: '#4f8f5f', playable: false, capitalName: 'Karachi', blurb: 'AI-controlled Pakistan and Afghanistan.' },
-  { code: 'SEA', name: 'Southeast Asia', color: '#c98f5f', playable: false, capitalName: 'Rangoon', blurb: 'AI-controlled Burma, Siam and Indochina.' },
-];
+/** The countries of 1947, from the generated map: 40 playable, the rest AI-controlled. */
+export const COUNTRIES: CountryDef[] = GENERATED_COUNTRIES.map((c) => ({
+  code: c.code,
+  name: c.name,
+  color: c.color,
+  playable: c.playable,
+  tier: c.tier,
+  capitalName: c.capitalName,
+  blurb: c.blurb,
+  startBonus: c.startBonus,
+}));
 
 export const COUNTRY_BY_CODE: Record<string, CountryDef> = Object.fromEntries(
   COUNTRIES.map((c) => [c.code, c]),
@@ -156,9 +46,11 @@ export interface ProvinceGeo {
   buildingSlots: number;
   population: number;
   production: Resources;
-  /** The one strategic resource this province produces, if it has a deposit. */
-  deposit?: 'oil' | 'steel' | 'electronics' | 'rare';
-  /** A double-resource region: the deposit produces twice as much. */
+  /** Cities produce manpower, money and one resource. Other provinces produce manpower and money only. */
+  isCity: boolean;
+  /** The resource this province produces: a city's resource, or the resource of a deposit province. */
+  deposit?: GeneratedResource;
+  /** A deposit province (not a city): produces its resource at double rate. */
   doubled: boolean;
   adjacent: string[];
   /** Neighbours reachable by road. Land forces move only along these. */
@@ -168,15 +60,16 @@ export interface ProvinceGeo {
 // The map is generated by packages/shared/scripts/generate-map.mjs (simplified real geography).
 export { MAP_HEIGHT, MAP_WIDTH };
 
-/** What one deposit produces per hour. Fixed, so every country's deposits are worth the same. */
-export const DEPOSIT_OUTPUT: Record<'oil' | 'steel' | 'electronics' | 'rare', number> = {
-  oil: 24,
-  steel: 28,
-  electronics: 8,
-  rare: 5,
+/** What a city's resource produces per hour; a deposit province produces twice as much. Fixed, so every country's resources are worth the same. */
+export const DEPOSIT_OUTPUT: Record<GeneratedResource, number> = {
+  food: 45,
+  oil: 18,
+  steel: 22,
+  electronics: 6,
+  rare: 4,
+  wood: 22,
 };
 
-const FOOD_BY_TERRAIN: Record<Terrain, number> = { plains: 1.2, forest: 1, hills: 0.9, mountains: 0.6, desert: 0.4 };
 const MANPOWER_BY_TERRAIN: Record<Terrain, number> = { plains: 1.1, forest: 1, hills: 1, mountains: 0.8, desert: 0.7 };
 
 function mulberry32(seed: number): () => number {
@@ -291,12 +184,12 @@ function buildProvinces(): ProvinceGeo[] {
     const terrain = g.terrain;
 
     const production = emptyResources();
-    // Every province grows food, raises manpower and earns some money. The ranges are narrow so
+    const isCity = !!g.isCity;
+    // Ordinary provinces raise manpower and money only. Cities raise more of both, and one resource.
+    // A deposit province (not a city) produces its resource at double rate. The ranges are narrow so
     // that provinces differ by terrain, not by luck.
-    production.money = Math.round(40 + rng() * 20);
-    production.food = Math.round((55 + rng() * 25) * FOOD_BY_TERRAIN[terrain]);
-    production.manpower = Math.round((80 + rng() * 40) * MANPOWER_BY_TERRAIN[terrain]);
-    // Strategic resources come only from deposits; a doubled region produces twice as much.
+    production.money = Math.round(isCity ? 16 + rng() * 8 : 5 + rng() * 3);
+    production.manpower = Math.round((isCity ? 26 + rng() * 10 : 12 + rng() * 6) * MANPOWER_BY_TERRAIN[terrain]);
     const deposit = g.deposit;
     if (deposit) production[deposit] = DEPOSIT_OUTPUT[deposit] * (g.doubled ? 2 : 1);
     if (isCapital) {
@@ -313,9 +206,10 @@ function buildProvinces(): ProvinceGeo[] {
       isCoastal: g.isCoastal,
       isCapital,
       terrain,
-      buildingSlots: isCapital ? 5 : g.doubled ? 4 : 3,
-      population: Math.round((200000 + rng() * 800000) * (isCapital ? 2 : 1)),
+      buildingSlots: isCapital ? 5 : g.doubled || isCity ? 4 : 3,
+      population: Math.round((60000 + rng() * 140000) * (isCity ? 4 : 1) * (isCapital ? 2 : 1)),
       production,
+      isCity,
       deposit,
       doubled: !!g.doubled,
       adjacent: g.adjacent,
@@ -324,15 +218,10 @@ function buildProvinces(): ProvinceGeo[] {
   });
 }
 
-/** Country sizes, so that every player starts with a fair share. */
-export type CountryTier = 'big' | 'medium' | 'minor';
-export const COUNTRY_TIER: Record<string, CountryTier> = {
-  USA: 'big', SOV: 'big', CHN: 'big', IND: 'big', BRA: 'big',
-  GBR: 'medium', FRA: 'medium', TUR: 'medium',
-};
-export const tierOf = (code: string): CountryTier => COUNTRY_TIER[code] ?? 'minor';
-/** Big countries have 10 provinces, medium 8, and AI-run minor countries 4 or fewer. */
-export const TIER_PROVINCES: Record<CountryTier, number> = { big: 10, medium: 8, minor: 4 };
+/** How many provinces each size of country has: superpowers 65, major countries 50 to 65, medium 35 to 50, AI-run minor countries 15 or fewer. */
+export const TIER_PROVINCES: Record<CountryTier, [number, number]> = { super: [65, 65], major: [50, 65], medium: [35, 50], minor: [1, 15] };
+const TIER_OF = new Map(COUNTRIES.map((c) => [c.code, c.tier]));
+export const tierOf = (code: string): CountryTier => TIER_OF.get(code) ?? 'minor';
 
 export const PROVINCES: ProvinceGeo[] = buildProvinces();
 export const PROVINCE_BY_KEY: Record<string, ProvinceGeo> = Object.fromEntries(

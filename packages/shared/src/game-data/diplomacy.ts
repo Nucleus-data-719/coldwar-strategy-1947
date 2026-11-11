@@ -19,7 +19,7 @@ export const OPINION_EVENTS = {
 } as const;
 
 /** What a resource gift is worth when it comes to winning someone over. */
-export const ASSISTANCE_VALUE: PartialResources = { money: 1, food: 1, oil: 2, steel: 2, electronics: 4, rare: 5 };
+export const ASSISTANCE_VALUE: PartialResources = { money: 1, food: 1, oil: 2, steel: 2, electronics: 4, rare: 5, wood: 1 };
 export const ASSISTANCE_MIN_VALUE = 150;
 /** Each full ASSISTANCE_VALUE_PER_POINT of value is one point of opinion, up to the cap per gift. */
 export const ASSISTANCE_VALUE_PER_POINT = 150;

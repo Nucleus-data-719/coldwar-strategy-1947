@@ -49,12 +49,13 @@ function mathLines(k: ResourceKey, b?: RateBreakdown): string[] {
 
 const USE: Record<ResourceKey, string> = {
   money: 'Pays for buildings, units and research.',
-  food: 'Feeds your armies. Grows in every province.',
-  oil: 'Fuels tanks, aircraft and ships. Only from oil deposits.',
-  steel: 'Needed for buildings and heavy units. Only from steel deposits.',
-  electronics: 'Needed for research and modern units. Only from electronics deposits.',
-  rare: 'Needed for advanced technology. Only from rare-material deposits.',
-  manpower: 'Soldiers for new units. Grows in every province.',
+  food: 'Feeds your armies. Produced by farming cities and farmland deposits.',
+  oil: 'Fuels tanks, aircraft and ships. Only from oil cities and oilfields.',
+  steel: 'Needed for buildings and heavy units. Only from steel cities and iron mines.',
+  electronics: 'Needed for research and modern units. Only from electronics cities.',
+  rare: 'Needed for advanced technology. Only from rare earth cities and mines.',
+  wood: 'Needed to build every kind of building. Only from timber cities and forests.',
+  manpower: 'Soldiers for new units. Every province raises some; cities raise more.',
 };
 
 /** The resource strip in the top bar. Every number explains itself on hover. */

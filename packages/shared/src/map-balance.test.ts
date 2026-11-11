@@ -1,63 +1,77 @@
 import { describe, expect, it } from 'vitest';
 import { COUNTRIES, DEPOSIT_OUTPUT, PROVINCES, TIER_PROVINCES, tierOf } from './index';
 
-const STRATEGIC = ['oil', 'steel', 'electronics', 'rare'] as const;
+const STRATEGIC = ['oil', 'steel', 'electronics', 'rare', 'wood'] as const;
 const of = (code: string) => PROVINCES.filter((p) => p.countryCode === code);
-const strategicTotal = (code: string) => {
-  const t = { oil: 0, steel: 0, electronics: 0, rare: 0 };
-  for (const p of of(code)) for (const k of STRATEGIC) t[k] += p.production[k];
-  return JSON.stringify(t);
-};
+const playable = COUNTRIES.filter((c) => c.playable);
 
 describe('map balance', () => {
-  it('big countries have 10 provinces, medium 8, AI-run minor countries 4 or fewer', () => {
+  it('there are 40 playable countries; the United States and the Soviet Union are the superpowers', () => {
+    expect(playable.length).toBe(40);
+    expect(tierOf('USA')).toBe('super');
+    expect(tierOf('SOV')).toBe('super');
+    expect(playable.filter((c) => tierOf(c.code) === 'super').length).toBe(2);
+  });
+
+  it('province counts follow the size of the country', () => {
     for (const c of COUNTRIES) {
       const n = of(c.code).length;
-      const tier = tierOf(c.code);
-      if (tier === 'minor') {
-        expect(n).toBeLessThan(TIER_PROVINCES.minor + 1);
-        expect(n).toBeGreaterThan(0);
-        expect(c.playable).toBe(false);
+      const [lo, hi] = TIER_PROVINCES[tierOf(c.code)];
+      expect(n >= lo - 2 && n <= hi + 3).toBe(true); // a landmass floor can add a province or two
+      expect(n > 0).toBe(true);
+      if (!c.playable) expect(tierOf(c.code)).toBe('minor');
+    }
+  });
+
+  it('every major and medium country has exactly two deposit provinces, and a deposit is never a city', () => {
+    for (const c of playable) {
+      const dep = of(c.code).filter((p) => p.doubled);
+      expect(dep.length).toBe(2);
+      for (const p of dep) { expect(p.isCity).toBe(false); expect(p.deposit !== undefined).toBe(true); }
+    }
+  });
+
+  it('cities produce manpower, money and one resource; other provinces produce manpower and money only', () => {
+    for (const p of PROVINCES) {
+      expect(p.production.money > 0).toBe(true);
+      expect(p.production.manpower > 0).toBe(true);
+      const res = (['food', ...STRATEGIC] as const).filter((k) => p.production[k] > 0);
+      if (p.isCity) {
+        expect(res.length).toBe(1);
+        expect(res[0]).toBe(p.deposit);
+        expect(p.production[p.deposit!]).toBe(DEPOSIT_OUTPUT[p.deposit!]);
+      } else if (p.doubled) {
+        expect(res.length).toBe(1);
+        expect(p.production[p.deposit!]).toBe(DEPOSIT_OUTPUT[p.deposit!] * 2);
       } else {
-        expect(n).toBe(TIER_PROVINCES[tier]);
-        expect(c.playable).toBe(true);
+        expect(res.length).toBe(0);
+        expect(p.deposit === undefined).toBe(true);
       }
     }
   });
 
-  it('every country has one or two double-resource provinces', () => {
+  it('every playable country has oil, steel, electronics, rare earth, wood and food', () => {
+    for (const c of playable) {
+      for (const k of [...STRATEGIC, 'food'] as const) {
+        expect(of(c.code).some((p) => p.production[k] > 0)).toBe(true);
+      }
+    }
+  });
+
+  it('history: Saudi oil, Japanese electronics, Chinese rare earth, Turkish steel', () => {
+    const has = (code: string, k: (typeof STRATEGIC)[number]) => of(code).filter((p) => p.production[k] > 0).length;
+    expect(has('SAU', 'oil') >= 3).toBe(true);
+    expect(has('JPN', 'electronics') >= 4).toBe(true);
+    expect(has('CHN', 'rare') >= 3).toBe(true);
+    expect(has('TUR', 'steel') >= 3).toBe(true);
+    expect(of('ROU').some((p) => p.name === 'Ploiesti' && p.deposit === 'oil')).toBe(true);
+  });
+
+  it('each country has a capital, and its capital is a city', () => {
     for (const c of COUNTRIES) {
-      const doubled = of(c.code).filter((p) => p.doubled).length;
-      expect(doubled).toBeGreaterThan(0);
-      expect(doubled).toBeLessThan(3);
-    }
-  });
-
-  it('only deposits produce strategic resources, and doubled regions produce twice as much', () => {
-    for (const p of PROVINCES) {
-      for (const k of STRATEGIC) {
-        const expected = p.deposit === k ? DEPOSIT_OUTPUT[k] * (p.doubled ? 2 : 1) : 0;
-        expect(p.production[k]).toBe(expected);
-      }
-      if (p.doubled) expect(p.deposit !== undefined).toBe(true);
-    }
-  });
-
-  it('every province produces money, food and manpower', () => {
-    for (const p of PROVINCES) {
-      expect(p.production.money).toBeGreaterThan(0);
-      expect(p.production.food).toBeGreaterThan(0);
-      expect(p.production.manpower).toBeGreaterThan(0);
-    }
-  });
-
-  it('countries of the same size have identical strategic output, and every player country has all four', () => {
-    const big = COUNTRIES.filter((c) => tierOf(c.code) === 'big').map((c) => strategicTotal(c.code));
-    const medium = COUNTRIES.filter((c) => tierOf(c.code) === 'medium').map((c) => strategicTotal(c.code));
-    for (const t of big) expect(t).toBe(big[0]);
-    for (const t of medium) expect(t).toBe(medium[0]);
-    for (const c of COUNTRIES.filter((c) => c.playable)) {
-      for (const k of STRATEGIC) expect(of(c.code).some((p) => p.production[k] > 0)).toBe(true);
+      const caps = of(c.code).filter((p) => p.isCapital);
+      expect(caps.length).toBe(1);
+      expect(caps[0].isCity).toBe(true);
     }
   });
 });
