@@ -11,7 +11,7 @@ export type UnitClass = 'infantry' | 'armor' | 'artillery' | 'air' | 'naval';
 const CLASS_OF: Record<string, UnitClass> = {
   infantry: 'infantry', artillery: 'artillery', light_tank: 'armor', heavy_tank: 'armor',
   fighter: 'air', bomber: 'air', air_support: 'air',
-  submarine: 'naval', destroyer: 'naval', cruiser: 'naval', battleship: 'naval',
+  submarine: 'naval', destroyer: 'naval', corvette: 'naval', cruiser: 'naval', battleship: 'naval',
 };
 
 /** The kind of unit that makes up most of a formation decides its figure and symbol. */
@@ -79,11 +79,11 @@ function figure(g: Graphics, cls: UnitClass, owner: number) {
 }
 
 /** Draws the whole token into an empty Graphics. Call `g.clear()` first when redrawing. */
-export function drawToken(g: Graphics, owner: number, cls: UnitClass, selected: boolean) {
+export function drawToken(g: Graphics, owner: number, cls: UnitClass, selected: boolean, hasArt = false) {
   if (selected) {
     g.roundRect(-TOKEN_HALF_WIDTH - 4, TOKEN_TOP - 4, TOKEN_HALF_WIDTH * 2 + 8, TOKEN_BOTTOM - TOKEN_TOP + 8, 6).stroke({ width: 2.4, color: 0xffe27a });
   }
-  figure(g, cls, owner);
+  if (!hasArt) figure(g, cls, owner);
 
   // Plate.
   g.roundRect(-17, -10, 34, 20, 3).fill({ color: INK }).stroke({ width: 1.6, color: 0xffe27a });

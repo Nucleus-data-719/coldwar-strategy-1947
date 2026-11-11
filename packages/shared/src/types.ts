@@ -51,6 +51,7 @@ export const UNIT_TYPES = [
   'bomber',
   'air_support',
   'submarine',
+  'corvette',
   'destroyer',
   'cruiser',
   'battleship',

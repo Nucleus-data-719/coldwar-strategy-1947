@@ -24,6 +24,7 @@ import { FormationsService } from '../military/formations.service';
 import { ProductionService } from '../production/production.service';
 import { CombatService } from '../military/combat.service';
 import { MovementService } from '../military/movement.service';
+import { NavalService } from '../military/naval.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PlayersService } from '../players/players.service';
 import { WarsService } from '../wars/wars.service';
@@ -54,8 +55,22 @@ const assistSchema = z.object({
     .strict(),
 });
 const warSchema = z.object({ countryId: z.string().uuid() });
+const sailSchema = z
+  .object({
+    provinceId: z.string().uuid().optional(),
+    node: z.number().int().min(0).max(100000).optional(),
+    units: z.record(z.enum(UNIT_TYPES), z.number().int().min(0).max(100000)).optional(),
+  })
+  .refine((v) => v.provinceId !== undefined || v.node !== undefined, 'Choose where to sail');
+const navalAttackSchema = z.object({
+  targetId: z.string().uuid(),
+  units: z.record(z.enum(UNIT_TYPES), z.number().int().min(0).max(100000)).optional(),
+});
+const delaySchema = z.object({ hours: z.number().min(0).max(24) });
 const moveSchema = z.object({
   provinceId: z.string().uuid(),
+  // Add the province to the end of the route the army already has.
+  waypoint: z.boolean().optional(),
   // Optional: send only some units, as a new task force.
   units: z.record(z.enum(UNIT_TYPES), z.number().int().min(0).max(100000)).optional(),
 });
@@ -65,6 +80,7 @@ const moveSchema = z.object({
 export class CampaignsController {
   constructor(
     private readonly campaigns: CampaignsService,
+    private readonly naval: NavalService,
     private readonly players: PlayersService,
     private readonly buildingsService: BuildingsService,
     private readonly notifications: NotificationsService,
@@ -138,8 +154,32 @@ export class CampaignsController {
     @Param('formationId', ParseUUIDPipe) formationId: string,
     @Body() body: unknown,
   ) {
+    const { provinceId, units, waypoint } = parse(moveSchema, body);
+    return this.movement.order(user.id, id, formationId, provinceId, units, waypoint);
+  }
+
+  @Post(':id/formations/:formationId/delay')
+  @HttpCode(200)
+  delay(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('formationId', ParseUUIDPipe) formationId: string,
+    @Body() body: unknown,
+  ) {
+    const { hours } = parse(delaySchema, body);
+    return this.movement.delay(user.id, id, formationId, hours);
+  }
+
+  @Post(':id/formations/:formationId/patrol')
+  @HttpCode(200)
+  patrol(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('formationId', ParseUUIDPipe) formationId: string,
+    @Body() body: unknown,
+  ) {
     const { provinceId, units } = parse(moveSchema, body);
-    return this.movement.order(user.id, id, formationId, provinceId, units);
+    return this.movement.orderPatrol(user.id, id, formationId, provinceId, units);
   }
 
   @Post(':id/formations/:formationId/stop')
@@ -149,7 +189,41 @@ export class CampaignsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Param('formationId', ParseUUIDPipe) formationId: string,
   ) {
-    return this.movement.stop(user.id, id, formationId);
+    return this.naval.stop(user.id, id, formationId);
+  }
+
+  @Post(':id/formations/:formationId/sail')
+  @HttpCode(200)
+  sail(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('formationId', ParseUUIDPipe) formationId: string,
+    @Body() body: unknown,
+  ) {
+    const { provinceId, node, units } = parse(sailSchema, body);
+    return this.naval.sail(user.id, id, formationId, { toProvinceId: provinceId, toNode: node }, units);
+  }
+
+  @Post(':id/formations/:formationId/naval-attack')
+  @HttpCode(200)
+  navalAttack(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('formationId', ParseUUIDPipe) formationId: string,
+    @Body() body: unknown,
+  ) {
+    const { targetId, units } = parse(navalAttackSchema, body);
+    return this.naval.attack(user.id, id, formationId, targetId, units);
+  }
+
+  @Post(':id/formations/:formationId/lay-mines')
+  @HttpCode(200)
+  layMines(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('formationId', ParseUUIDPipe) formationId: string,
+  ) {
+    return this.naval.layMines(user.id, id, formationId);
   }
 
   @Post(':id/provinces/:provinceId/production')

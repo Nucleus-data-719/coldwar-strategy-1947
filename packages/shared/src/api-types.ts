@@ -80,6 +80,8 @@ export interface BuildingDto {
   status: BuildingStatus;
   startedAt: string;
   completesAt: string;
+  /** Bomb damage in percent. At 50% or more the building stops working until repaired. */
+  damage: number;
 }
 
 export interface StateProvince {
@@ -97,6 +99,10 @@ export interface GameState {
   provinces: StateProvince[];
   /** Your own armies, including those on the move. */
   formations: FormationDto[];
+  /** Enemy fleets at sea that your ships and coasts can see. */
+  enemies?: EnemyFleetDto[];
+  /** Your own mine fields, and enemy ones your destroyers and corvettes have found. */
+  mines?: SeaMineDto[];
   /** Ids of the countries you are at war with. */
   atWarWith: string[];
   resources: { balance: Resources; rates: Resources; shortages: ResourceKey[]; breakdown: RateBreakdown };
@@ -130,6 +136,19 @@ export interface MovementDto {
   remainingKeys: string[];
   startedAt: string;
   arrivesAt: string;
+  /** The aircraft are flying out to start a patrol. */
+  patrol?: boolean;
+  /** The army is waiting (delayed) until this time, standing `holdFraction` of the way along its leg. */
+  holdUntil?: string | null;
+  holdFraction?: number;
+}
+
+/** An air force holding a patrol over a province. */
+export interface PatrolDto {
+  provinceKey: string;
+  /** Radius of the patrol circle in map units. */
+  radius: number;
+  since: string;
 }
 
 export interface FormationDto {
@@ -140,8 +159,48 @@ export interface FormationDto {
   provinceKey: string;
   units: { unitType: UnitType; count: number }[];
   movement: MovementDto | null;
+  /** Set while the aircraft are on patrol. */
+  patrol?: PatrolDto | null;
   /** Id of the general leading this army, if any (yours only). */
   generalId?: string | null;
+  /** Set while the fleet is at sea (not in a port). */
+  sea?: SeaPositionDto | null;
+}
+
+/** A fleet at sea. `node` is the dot it is at (or left from, on a voyage). */
+export interface SeaPositionDto {
+  node: number;
+  voyage: {
+    nodes: number[];
+    startedAt: string;
+    arrivesAt: string;
+    /** The port the fleet is sailing into, if any. */
+    destKey: string | null;
+    /** The enemy fleet it is hunting, if any. */
+    attackTargetId: string | null;
+  } | null;
+}
+
+/** An enemy fleet you can currently see. Ships are shown without their make-up unless a hunter has them in sight. */
+export interface EnemyFleetDto {
+  id: string;
+  countryId: string;
+  node: number;
+  /** Where it is heading, if it is on a voyage and you can tell. */
+  toNode: number | null;
+  /** Rough size, in ships. */
+  ships: number;
+  /** Submarines only show up when your destroyers or corvettes have spotted them. */
+  submarines: boolean;
+}
+
+export interface SeaMineDto {
+  id: string;
+  countryId: string;
+  node: number;
+  strength: number;
+  expiresAt: string;
+  mine: boolean;
 }
 
 export interface ProvinceDetail {

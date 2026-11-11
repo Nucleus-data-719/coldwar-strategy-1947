@@ -36,6 +36,7 @@ import {
 } from '../db/schema';
 import { EconomyService } from '../economy/economy.service';
 import { toFormationDto } from '../military/formation.mapper';
+import { NavalService } from '../military/naval.service';
 import { PlayersService } from '../players/players.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { generals } from '../db/schema';
@@ -49,6 +50,7 @@ function toBuildingDto(b: BuildingRow): BuildingDto {
     status: b.status,
     startedAt: b.startedAt.toISOString(),
     completesAt: b.completesAt.toISOString(),
+    damage: b.damage,
   };
 }
 
@@ -68,6 +70,7 @@ export class CampaignsService implements OnModuleInit {
     private readonly realtime: RealtimeService,
     private readonly wars: WarsService,
     private readonly production: ProductionService,
+    private readonly naval: NavalService,
   ) {}
 
   /** Campaigns made on an older map (any province key that no longer exists) cannot be played any more. */
@@ -291,7 +294,7 @@ export class CampaignsService implements OnModuleInit {
       .from(formationUnits)
       .innerJoin(formations, eq(formations.id, formationUnits.formationId))
       // Armies on the move are drawn as markers, not counted in a province.
-      .where(and(eq(formations.campaignId, campaignId), isNull(formations.moveArrivesAt)));
+      .where(and(eq(formations.campaignId, campaignId), isNull(formations.moveArrivesAt), isNull(formations.seaNode)));
 
     const keyById = new Map(provRows.map((p) => [p.id, p.key]));
     const countByOwner = new Map<string, number>();
@@ -362,6 +365,7 @@ export class CampaignsService implements OnModuleInit {
       countries: stateCountries,
       provinces: stateProvinces,
       formations: myFormationDtos,
+      ...(await this.naval.seaView(this.db, campaignId, player.countryId, keyById)),
       atWarWith: [...(await this.wars.enemiesOf(this.db, player.countryId))],
       capitalMove: (() => {
         const me = countryRows.find((c) => c.id === player.countryId);
@@ -390,7 +394,7 @@ export class CampaignsService implements OnModuleInit {
     const formationRows = await this.db
       .select()
       .from(formations)
-      .where(and(eq(formations.provinceId, province.id), isNull(formations.moveArrivesAt)));
+      .where(and(eq(formations.provinceId, province.id), isNull(formations.moveArrivesAt), isNull(formations.seaNode)));
     const allProvinces = await this.db
       .select({ id: provinces.id, key: provinces.key })
       .from(provinces)

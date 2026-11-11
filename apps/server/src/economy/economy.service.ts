@@ -1,6 +1,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { eq, inArray } from 'drizzle-orm';
 import {
+  BUILDING_KNOCKED_OUT,
   addResources,
   applyRates,
   emptyResources,
@@ -66,7 +67,8 @@ export class EconomyService {
       const byProvince = new Map<string, BuildingLike[]>();
       for (const b of blds) {
         const list = byProvince.get(b.provinceId) ?? [];
-        list.push({ type: b.type, status: b.status });
+        // A building bombed past the limit stops working until repaired.
+        list.push({ type: b.type, status: b.status === 'complete' && b.damage >= BUILDING_KNOCKED_OUT ? 'constructing' : b.status });
         byProvince.set(b.provinceId, list);
       }
       for (const p of owned) {

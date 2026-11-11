@@ -1,6 +1,6 @@
 import type { ResourceKey, Resources, Terrain } from './types';
 import { emptyResources } from './types';
-import { GENERATED_PROVINCES, GENERATED_ROADS, MAP_HEIGHT, MAP_WIDTH } from './map-geometry.generated';
+import { GENERATED_PROVINCES, GENERATED_ROADS, GENERATED_SEA, MAP_HEIGHT, MAP_WIDTH } from './map-geometry.generated';
 
 export interface CountryDef {
   code: string;
@@ -193,17 +193,96 @@ function mulberry32(seed: number): () => number {
 export type RoadKind = 'highway' | 'road' | 'ferry';
 
 /** Roads between provinces. Highways run out of capitals; ferries are the long sea lanes between landmasses. */
-export const ROADS: { a: string; b: string; kind: RoadKind }[] = GENERATED_ROADS.map(([a, b, kind]) => ({ a, b, kind }));
+export const ROADS: { a: string; b: string; kind: RoadKind; via: number[] }[] = GENERATED_ROADS.map(([a, b, kind, via]) => ({ a, b, kind, via }));
 const roadsOf = new Map<string, string[]>();
 const roadKind = new Map<string, RoadKind>();
+const roadVia = new Map<string, { a: string; via: number[] }>();
 const roadId = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 for (const r of ROADS) {
   roadsOf.set(r.a, [...(roadsOf.get(r.a) ?? []), r.b]);
   roadsOf.set(r.b, [...(roadsOf.get(r.b) ?? []), r.a]);
   roadKind.set(roadId(r.a, r.b), r.kind);
+  roadVia.set(roadId(r.a, r.b), { a: r.a, via: r.via });
 }
 /** The kind of road between two provinces, or undefined when there is none. */
 export const roadBetween = (a: string, b: string): RoadKind | undefined => roadKind.get(roadId(a, b));
+
+export type Point = [number, number];
+
+/** The line a road takes from the centre of `from` to the centre of `to`: through the border crossing (or along the sea lane for ferries). */
+export function roadPath(from: string, to: string): Point[] {
+  const f = PROVINCE_BY_KEY[from], t = PROVINCE_BY_KEY[to];
+  const rec = roadVia.get(roadId(from, to));
+  const mid: Point[] = [];
+  if (rec) {
+    for (let i = 0; i + 1 < rec.via.length; i += 2) mid.push([rec.via[i], rec.via[i + 1]]);
+    if (rec.a !== from) mid.reverse();
+  }
+  return [[f.center.x, f.center.y], ...mid, [t.center.x, t.center.y]];
+}
+
+// ---------- sea lanes ----------
+/** Dots over the ocean. Ships sail from dot to dot. */
+export const SEA_DOTS: Point[] = Array.from({ length: GENERATED_SEA.nodes.length / 2 }, (_, i) => [GENERATED_SEA.nodes[i * 2], GENERATED_SEA.nodes[i * 2 + 1]]);
+const seaAdj: number[][] = SEA_DOTS.map(() => []);
+/** The dots each dot is linked to. */
+export const seaNeighbors = (i: number): readonly number[] => seaAdj[i] ?? [];
+export const SEA_LINKS: [number, number][] = [];
+for (let i = 0; i + 1 < GENERATED_SEA.links.length; i += 2) {
+  const a = GENERATED_SEA.links[i], b = GENERATED_SEA.links[i + 1];
+  seaAdj[a].push(b); seaAdj[b].push(a); SEA_LINKS.push([a, b]);
+}
+const portDots = new Map<string, number[]>(GENERATED_SEA.ports.map((r) => [r[0] as string, r.slice(1) as number[]]));
+/** The dots a coastal province's ships enter the sea through. */
+export const portNodes = (key: string): readonly number[] => portDots.get(key) ?? [];
+/** Whether ships can leave this province (it has a harbour on open water). */
+export const hasPort = (key: string): boolean => portDots.has(key);
+
+export interface SeaRoute {
+  /** From the centre of the first province, along the dots, to the centre of the last. */
+  points: Point[];
+  /** Length in map units. */
+  length: number;
+}
+const seaCache = new Map<string, SeaRoute | null>();
+const dd = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+/** Shortest way by sea between two ports; null when their waters are not connected. */
+export function seaRoute(from: string, to: string): SeaRoute | null {
+  const id = `${from}>${to}`;
+  if (seaCache.has(id)) return seaCache.get(id)!;
+  let out: SeaRoute | null = null;
+  const A = portDots.get(from), B = portDots.get(to), f = PROVINCE_BY_KEY[from], t = PROVINCE_BY_KEY[to];
+  if (A && B && f && t) {
+    const goal = new Set(B);
+    const dist = new Map<number, number>();
+    const prev = new Map<number, number>();
+    const done = new Set<number>();
+    const fc: Point = [f.center.x, f.center.y], tc: Point = [t.center.x, t.center.y];
+    for (const a of A) dist.set(a, dd(fc, SEA_DOTS[a]));
+    let end = -1;
+    for (;;) {
+      let cur = -1, best = Infinity;
+      for (const [k, v] of dist) if (!done.has(k) && v < best) { best = v; cur = k; }
+      if (cur < 0) break;
+      if (goal.has(cur)) { end = cur; break; }
+      done.add(cur);
+      for (const nb of seaAdj[cur]) {
+        const c = best + dd(SEA_DOTS[cur], SEA_DOTS[nb]);
+        if (c < (dist.get(nb) ?? Infinity)) { dist.set(nb, c); prev.set(nb, cur); }
+      }
+    }
+    if (end >= 0) {
+      const chain = [end];
+      while (prev.has(chain[0])) chain.unshift(prev.get(chain[0])!);
+      const points: Point[] = [fc, ...chain.map((k) => SEA_DOTS[k]), tc];
+      let length = 0;
+      for (let i = 1; i < points.length; i++) length += dd(points[i - 1], points[i]);
+      out = { points, length };
+    }
+  }
+  seaCache.set(id, out);
+  return out;
+}
 
 function buildProvinces(): ProvinceGeo[] {
   return GENERATED_PROVINCES.map((g, index) => {

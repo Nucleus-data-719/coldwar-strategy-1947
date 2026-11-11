@@ -30,6 +30,8 @@ export class FormationsService {
         .for('update');
       if (!formation || formation.countryId !== country.id) throw new NotFoundException('Army not found');
       if (formation.moveArrivesAt) throw new BadRequestException('An army on the march cannot be split');
+      if (formation.patrolActive) throw new BadRequestException('Cancel the patrol first');
+      if (formation.seaNode !== null) throw new BadRequestException('Fleets at sea cannot be split. Bring them into port first.');
       const units = await tx.select().from(formationUnits).where(eq(formationUnits.formationId, formation.id));
       const { target } = await this.movement.split(tx, formation, units, send);
       if (target.id === formation.id) throw new BadRequestException('Keep at least one unit in the original army');
@@ -54,6 +56,8 @@ export class FormationsService {
         throw new NotFoundException('Army not found');
       }
       if (source.moveArrivesAt || target.moveArrivesAt) throw new BadRequestException('Armies on the march cannot be merged');
+      if (source.seaNode !== null || target.seaNode !== null) throw new BadRequestException('Fleets at sea cannot be merged. Bring them into port first.');
+      if (source.patrolActive || target.patrolActive) throw new BadRequestException('Cancel the patrol first');
       if (source.provinceId !== target.provinceId) throw new BadRequestException('Both armies must be in the same province');
 
       const sourceUnits = await tx.select().from(formationUnits).where(eq(formationUnits.formationId, source.id));

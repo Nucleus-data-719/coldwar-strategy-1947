@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { and, eq, isNotNull, lte } from 'drizzle-orm';
+import { and, eq, isNotNull, lt, lte } from 'drizzle-orm';
 import {
   PROVINCE_BY_KEY,
   UNITS,
@@ -8,6 +8,10 @@ import {
   isNavalFormation,
   planRoute,
   canOccupyLand,
+  PATROL_MAX_FLIGHT,
+  isAirFormation,
+  patrolDistance,
+  patrolFlightSeconds,
   type UnitType,
 } from '@cw/shared';
 import { env } from '../config/env';
@@ -68,7 +72,7 @@ export class MovementService {
     const rails = await tx
       .select({ provinceId: buildings.provinceId })
       .from(buildings)
-      .where(and(eq(buildings.campaignId, campaignId), eq(buildings.type, 'railway'), eq(buildings.status, 'complete')));
+      .where(and(eq(buildings.campaignId, campaignId), eq(buildings.type, 'railway'), eq(buildings.status, 'complete'), lt(buildings.damage, 50)));
     const railwayKeys = new Set(rails.map((r) => keyById.get(r.provinceId)).filter((k): k is string => !!k));
     return { keyById, idByKey, ownerByKey, railwayKeys };
   }
@@ -128,11 +132,12 @@ export class MovementService {
     formationId: string,
     destinationProvinceId: string,
     send?: Partial<Record<UnitType, number>>,
+    waypoint = false,
   ) {
     const player = await this.players.require(userId, campaignId);
 
     const result = await this.economy.lock(player.countryId, (tx, country) =>
-      this.orderFor(tx, country, campaignId, formationId, destinationProvinceId, send),
+      this.orderFor(tx, country, campaignId, formationId, destinationProvinceId, send, waypoint),
     );
 
     this.realtime.campaignUpdate(campaignId, { kind: 'move' });
@@ -147,6 +152,7 @@ export class MovementService {
     formationId: string,
     destinationProvinceId: string,
     send?: Partial<Record<UnitType, number>>,
+    waypoint = false,
   ): Promise<{ formationId: string; etaSeconds: number }> {
     const [formation] = await tx
       .select()
@@ -172,7 +178,8 @@ export class MovementService {
     const speed = formationSpeed(units);
     if (speed <= 0) throw new BadRequestException('This army has no units');
 
-    const startId = moving ? target.moveNextProvinceId! : target.provinceId;
+    // A waypoint is added at the end of the route the army already has; a normal order replaces what follows the current leg.
+    const startId = moving ? (waypoint ? (target.movePath.at(-1) ?? target.moveNextProvinceId!) : target.moveNextProvinceId!) : target.provinceId;
     const startKey = ctx.keyById.get(startId)!;
     if (!moving && startKey === destKey) throw new BadRequestException('The army is already in that province');
 
@@ -196,7 +203,10 @@ export class MovementService {
 
     const ids = route.path.map((k) => ctx.idByKey.get(k)!);
     if (moving) {
-      await tx.update(formations).set({ movePath: ids.slice(1) }).where(eq(formations.id, target.id));
+      await tx
+        .update(formations)
+        .set({ movePath: waypoint ? [...target.movePath, ...ids.slice(1)] : ids.slice(1), movePatrol: false })
+        .where(eq(formations.id, target.id));
     } else {
       const now = new Date();
       await tx
@@ -206,6 +216,10 @@ export class MovementService {
           movePath: ids.slice(2),
           moveStartedAt: now,
           moveArrivesAt: new Date(now.getTime() + route.legSeconds[0] * 1000),
+          movePatrol: false,
+          patrolActive: false,
+          patrolSince: null,
+          patrolSettledAt: null,
         })
         .where(eq(formations.id, target.id));
     }
@@ -213,10 +227,99 @@ export class MovementService {
   }
 
   /**
+   * Player command: send aircraft to patrol over a province. They fly straight there (any province, any owner,
+   * within range) and then hold the patrol until it is cancelled. See PatrolService for what a patrol does.
+   */
+  async orderPatrol(
+    userId: string,
+    campaignId: string,
+    formationId: string,
+    destinationProvinceId: string,
+    send?: Partial<Record<UnitType, number>>,
+  ) {
+    const player = await this.players.require(userId, campaignId);
+    const result = await this.economy.lock(player.countryId, async (tx, country) => {
+      const [formation] = await tx
+        .select()
+        .from(formations)
+        .where(and(eq(formations.id, formationId), eq(formations.campaignId, campaignId)))
+        .for('update');
+      if (!formation || formation.countryId !== country.id) throw new NotFoundException('Army not found');
+      if (formation.moveArrivesAt) throw new BadRequestException('Wait for the aircraft to land, or cancel their orders first');
+
+      const ctx = await this.loadContext(tx, campaignId);
+      const destKey = ctx.keyById.get(destinationProvinceId);
+      if (!destKey) throw new NotFoundException('Province not found');
+
+      let target: FormationRow = formation;
+      const unitRows = await tx.select().from(formationUnits).where(eq(formationUnits.formationId, formation.id));
+      let units: { unitType: UnitType; count: number }[] = unitRows;
+      if (send && Object.keys(send).length > 0) ({ target, units } = await this.split(tx, formation, unitRows, send));
+      if (!isAirFormation(units)) throw new BadRequestException('Only aircraft can patrol. Send the aircraft as a separate force.');
+
+      const startKey = ctx.keyById.get(target.provinceId)!;
+      if (patrolDistance(startKey, destKey) > PATROL_MAX_FLIGHT) throw new BadRequestException('Too far for these aircraft. Patrol closer to where they are based.');
+      const now = new Date();
+      if (startKey === destKey) {
+        await tx.update(formations).set({ patrolActive: true, patrolSince: now, patrolSettledAt: now, movePatrol: false }).where(eq(formations.id, target.id));
+        return { formationId: target.id, etaSeconds: 0 };
+      }
+      const seconds = patrolFlightSeconds(startKey, destKey, formationSpeed(units), env.GAME_SPEED);
+      await tx
+        .update(formations)
+        .set({
+          moveNextProvinceId: destinationProvinceId,
+          movePath: [],
+          moveStartedAt: now,
+          moveArrivesAt: new Date(now.getTime() + seconds * 1000),
+          movePatrol: true,
+          patrolActive: false,
+          patrolSince: null,
+          patrolSettledAt: null,
+        })
+        .where(eq(formations.id, target.id));
+      return { formationId: target.id, etaSeconds: seconds };
+    });
+    this.realtime.campaignUpdate(campaignId, { kind: 'move' });
+    return { ok: true, ...result };
+  }
+
+  /**
    * Player command: cancel the order. An army heading into its own land finishes the current leg and halts.
    * An army about to attack turns back instead: it returns to the province it left, taking as long as it
    * has already marched.
    */
+  /**
+   * Hold a marching army where it stands for `hours` game hours (0 cancels a delay). The leg's start and arrival
+   * times slide back by the same amount, so the whole route arrives that much later.
+   */
+  async delay(userId: string, campaignId: string, formationId: string, hours: number) {
+    const player = await this.players.require(userId, campaignId);
+    await this.economy.lock(player.countryId, async (tx, country) => {
+      const [f] = await tx.select().from(formations).where(and(eq(formations.id, formationId), eq(formations.campaignId, campaignId))).for('update');
+      if (!f || f.countryId !== country.id) throw new NotFoundException('Army not found');
+      if (!f.moveArrivesAt || !f.moveStartedAt || !f.moveNextProvinceId) throw new BadRequestException('That army is not moving');
+      const now = Date.now();
+      const span = Math.max(1000, f.moveArrivesAt.getTime() - f.moveStartedAt.getTime());
+      const held = !!f.moveHoldUntil && f.moveHoldUntil.getTime() > now;
+      // How far along the leg the army stands.
+      const p = held ? (f.moveHoldFraction ?? 0) : Math.min(1, Math.max(0, (now - f.moveStartedAt.getTime()) / span));
+      const seconds = Math.round((hours * 3600) / env.GAME_SPEED);
+      const arrives = now + seconds * 1000 + Math.round((1 - p) * span);
+      await tx
+        .update(formations)
+        .set({
+          moveStartedAt: new Date(arrives - span),
+          moveArrivesAt: new Date(arrives),
+          moveHoldUntil: seconds > 0 ? new Date(now + seconds * 1000) : null,
+          moveHoldFraction: seconds > 0 ? p : null,
+        })
+        .where(eq(formations.id, f.id));
+    });
+    this.realtime.campaignUpdate(campaignId, { kind: 'move' });
+    return { ok: true };
+  }
+
   async stop(userId: string, campaignId: string, formationId: string) {
     const player = await this.players.require(userId, campaignId);
     await this.economy.lock(player.countryId, async (tx, country) => {
@@ -226,6 +329,16 @@ export class MovementService {
         .where(and(eq(formations.id, formationId), eq(formations.campaignId, campaignId)))
         .for('update');
       if (!formation || formation.countryId !== country.id) throw new NotFoundException('Army not found');
+      if (formation.patrolActive && !formation.moveArrivesAt) {
+        // End the patrol: the aircraft stay where they are.
+        await tx.update(formations).set({ patrolActive: false, patrolSince: null, patrolSettledAt: null }).where(eq(formations.id, formation.id));
+        return;
+      }
+      if (formation.movePatrol) {
+        // Still flying out to patrol: finish the flight but do not start the patrol.
+        await tx.update(formations).set({ movePatrol: false, movePath: [] }).where(eq(formations.id, formation.id));
+        return;
+      }
       if (!formation.moveArrivesAt || !formation.moveNextProvinceId) throw new BadRequestException('That army is not moving');
 
       const [next] = await tx.select({ owner: provinces.ownerCountryId }).from(provinces).where(eq(provinces.id, formation.moveNextProvinceId));
@@ -243,6 +356,8 @@ export class MovementService {
           movePath: [],
           moveStartedAt: new Date(now),
           moveArrivesAt: new Date(now + marched),
+          moveHoldUntil: null,
+          moveHoldFraction: null,
         })
         .where(eq(formations.id, formation.id));
     });
@@ -288,6 +403,23 @@ export class MovementService {
     const [f] = await tx.select().from(formations).where(eq(formations.id, formationId)).for('update');
     if (!f || !f.moveArrivesAt || !f.moveNextProvinceId || f.moveArrivesAt.getTime() > Date.now()) return [];
     const countryId = f.countryId;
+    if (f.movePatrol) {
+      // Aircraft arriving to patrol: no battle, they start circling over the province.
+      const key = await tx.select({ key: provinces.key }).from(provinces).where(eq(provinces.id, f.moveNextProvinceId));
+      const at = new Date(f.moveArrivesAt.getTime());
+      await tx
+        .update(formations)
+        .set({ provinceId: f.moveNextProvinceId, moveNextProvinceId: null, movePath: [], moveStartedAt: null, moveArrivesAt: null, movePatrol: false, patrolActive: true, patrolSince: at, patrolSettledAt: at })
+        .where(eq(formations.id, f.id));
+      return [
+        await this.notifications.add(tx, {
+          campaignId: f.campaignId,
+          countryId,
+          type: 'army_arrived',
+          message: `${f.name} is on patrol over ${PROVINCE_BY_KEY[key[0]?.key ?? '']?.name ?? 'its patrol area'}.`,
+        }),
+      ];
+    }
     const attacker = locked.get(countryId)!;
 
     const ctx = await this.loadContext(tx, f.campaignId);
@@ -308,6 +440,7 @@ export class MovementService {
         atWarWith,
         railwayKeys: ctx.railwayKeys,
         useRoads: usesRoads(units),
+        coastalOnly: isNavalFormation(units),
       });
 
     let result = step(
@@ -363,7 +496,7 @@ export class MovementService {
       result = step(result.locationKey, result.targetKey, result.remainingKeys, result.arrivedAt);
     }
 
-    const clear = { moveNextProvinceId: null, movePath: [] as string[], moveStartedAt: null, moveArrivesAt: null };
+    const clear = { moveNextProvinceId: null, movePath: [] as string[], moveStartedAt: null, moveArrivesAt: null, moveHoldUntil: null, moveHoldFraction: null };
     const location = ctx.idByKey.get(result.locationKey)!;
     const place = PROVINCE_BY_KEY[result.locationKey]?.name ?? 'its destination';
 
@@ -376,6 +509,8 @@ export class MovementService {
           movePath: result.remainingKeys.map((k) => ctx.idByKey.get(k)!),
           moveStartedAt: new Date(result.legStartedAt),
           moveArrivesAt: new Date(result.legArrivesAt),
+          moveHoldUntil: null,
+          moveHoldFraction: null,
         })
         .where(eq(formations.id, f.id));
       return notes;

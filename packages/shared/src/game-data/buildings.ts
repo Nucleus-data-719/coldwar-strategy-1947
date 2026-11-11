@@ -47,7 +47,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   harbor: {
     type: 'harbor',
     name: 'Harbor',
-    description: 'Coastal only. Builds submarines, destroyers, cruisers and battleships once they are researched.',
+    description: 'Coastal only. Builds submarines, corvettes, destroyers, cruisers and battleships once they are researched.',
     cost: { money: 600, steel: 150 },
     buildSeconds: 5400,
     requiresCoastal: true,

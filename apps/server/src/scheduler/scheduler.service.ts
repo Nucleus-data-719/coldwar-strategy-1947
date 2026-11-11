@@ -27,6 +27,8 @@ import { ResearchService } from '../research/research.service';
 import { CapitalService } from '../capital/capital.service';
 import { ProductionService } from '../production/production.service';
 import { MovementService } from '../military/movement.service';
+import { PatrolService } from '../military/patrol.service';
+import { NavalService } from '../military/naval.service';
 import { EconomyService } from '../economy/economy.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -49,6 +51,8 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     private readonly realtime: RealtimeService,
     private readonly ai: AiService,
     private readonly movement: MovementService,
+    private readonly patrols: PatrolService,
+    private readonly naval: NavalService,
     private readonly production: ProductionService,
     private readonly capital: CapitalService,
     private readonly research: ResearchService,
@@ -74,6 +78,8 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.completeBuildings();
       await this.movement.processDue();
+      await this.patrols.processDue();
+      await this.naval.processDue();
       await this.endDisruptions();
       await this.production.processDue();
       await this.capital.processDue();

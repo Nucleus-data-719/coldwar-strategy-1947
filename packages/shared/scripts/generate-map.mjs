@@ -392,58 +392,146 @@ const capitalOf = new Map();
 for (const s of seeds) if (!capitalOf.has(s.code)) capitalOf.set(s.code, s.idx);
 const isBorder = ([a, b]) => codeOf(a) !== codeOf(b) && !bridgeSet.has(ek(a, b));
 
-const roadSet = new Set(bridgeSet);
-for (const [a, b] of edgeList) {
-  if (bridgeSet.has(ek(a, b))) continue;
-  const d = dist(a, b);
-  let ok = true;
-  for (const t of seeds) {
-    if (t.idx === a || t.idx === b) continue;
-    if (Math.max(dist(a, t.idx), dist(b, t.idx)) < d) { ok = false; break; }
-  }
-  if (ok) roadSet.add(ek(a, b));
-}
-// At most two crossings per pair of countries (the shortest ones); at least one if they touch.
-const crossings = new Map();
-for (const e of edgeList.filter(isBorder)) {
-  const k = [codeOf(e[0]), codeOf(e[1])].sort().join('|');
-  if (!crossings.has(k)) crossings.set(k, []);
-  crossings.get(k).push(e);
-}
-for (const list of crossings.values()) {
-  list.sort((p, q) => dist(p[0], p[1]) - dist(q[0], q[1]));
-  list.forEach((e, i) => {
-    const k = ek(e[0], e[1]);
-    if (i < 2 && (i === 0 || roadSet.has(k))) roadSet.add(k);
-    else if (i >= 2) roadSet.delete(k);
-  });
-}
-// Union-find helpers.
-const makeUF = () => {
-  const parent = new Map(seeds.map((t) => [t.idx, t.idx]));
-  const find = (x) => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
-  return { find, union: (a, b) => parent.set(find(a), find(b)), same: (a, b) => find(a) === find(b) };
-};
-// Every country connected inside itself.
-const inside = makeUF();
-for (const k of roadSet) { const [a, b] = k.split('-').map(Number); if (codeOf(a) === codeOf(b)) inside.union(a, b); }
-for (const [a, b] of [...edgeList].sort((p, q) => dist(p[0], p[1]) - dist(q[0], q[1]))) {
-  if (codeOf(a) !== codeOf(b) || inside.same(a, b)) continue;
-  roadSet.add(ek(a, b)); inside.union(a, b);
-}
-// The whole network as connected as the adjacency graph.
-const whole = makeUF();
-for (const k of roadSet) { const [a, b] = k.split('-').map(Number); whole.union(a, b); }
-for (const [a, b] of [...edgeList].sort((p, q) => dist(p[0], p[1]) - dist(q[0], q[1]))) {
-  if (whole.same(a, b)) continue;
-  roadSet.add(ek(a, b)); whole.union(a, b);
-}
+// Every pair of neighbouring provinces is joined by a road (nothing is cut), except the sea crossings
+// listed in BRIDGES, which are ferries.
+const roadSet = new Set(edgeList.map(([a, b]) => ek(a, b)));
 const capitals = new Set(capitalOf.values());
 const roads = [...roadSet].map((k) => {
   const [a, b] = k.split('-').map(Number);
   const kind = bridgeSet.has(k) ? 'ferry' : capitals.has(a) || capitals.has(b) ? 'highway' : 'road';
   return [a, b, kind];
 });
+
+// ---------- sea lanes: a net of dots over the ocean ----------
+const STEP = 8; // grid cells between dots (4 degrees)
+const isSea = (i, j) => i >= 0 && j >= 0 && i < W && j < H && reg[j * W + i] < 0 && !land[j * W + i];
+const nodeAt = new Map();
+const seaNodes = [];
+for (let j = 4; j < H; j += STEP) for (let i = 4; i < W; i += STEP) {
+  if (!isSea(i, j)) continue;
+  nodeAt.set(`${i},${j}`, seaNodes.length);
+  seaNodes.push([i, j]);
+}
+const clearLine = (i0, j0, i1, j1) => {
+  const n = Math.max(Math.abs(i1 - i0), Math.abs(j1 - j0)) * 2;
+  for (let k = 0; k <= n; k++) {
+    const t = k / n;
+    if (!isSea(Math.round(i0 + (i1 - i0) * t), Math.round(j0 + (j1 - j0) * t))) return false;
+  }
+  return true;
+};
+const seaLinks = [];
+const seaAdj = seaNodes.map(() => []);
+seaNodes.forEach(([i, j], a) => {
+  for (const [di, dj] of [[STEP, 0], [0, STEP], [STEP, STEP], [STEP, -STEP]]) {
+    const b = nodeAt.get(`${i + di},${j + dj}`);
+    if (b === undefined || !clearLine(i, j, i + di, j + dj)) continue;
+    seaLinks.push([a, b]); seaAdj[a].push(b); seaAdj[b].push(a);
+  }
+});
+// province -> the dots its ships can reach (sea next to the coast, straight line out of the province)
+const portsOf = new Map(); // idx -> node indices
+const coastCells = new Map(); // idx -> sea cells touching the province
+for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+  const r = reg[j * W + i];
+  if (r < 0) continue;
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (isSea(i + di, j + dj)) { if (!coastCells.has(r)) coastCells.set(r, []); coastCells.get(r).push([i + di, j + dj]); }
+  }
+}
+// every coastal province gets a harbour dot just off its coast (the sea cell nearest its centre that is two cells from land)
+const gridCount = seaNodes.length;
+for (const t of seeds) {
+  const cells = coastCells.get(t.idx);
+  if (!cells) continue;
+  const [cxm, cym] = centers.get(t.idx);
+  const ci = (cxm / SX) / CELL, cj = (cym / SY) / CELL;
+  const open = cells.filter(([i, j]) => [[2, 0], [-2, 0], [0, 2], [0, -2]].every(([di, dj]) => isSea(i + di, j + dj) || reg[(j + dj) * W + i + di] === t.idx));
+  const pool = open.length ? open : cells;
+  pool.sort((p, q) => Math.hypot(p[0] - ci, p[1] - cj) - Math.hypot(q[0] - ci, q[1] - cj));
+  const [pi, pj] = pool[0];
+  const id = seaNodes.length;
+  seaNodes.push([pi, pj]); seaAdj.push([]);
+  portsOf.set(t.idx, [id]);
+}
+// link every harbour dot (and its neighbours) to the nearest dots it can see over open water
+for (let a = gridCount; a < seaNodes.length; a++) {
+  const [ai, aj] = seaNodes[a];
+  const cand = seaNodes.map((n, k) => ({ k, d: Math.hypot(n[0] - ai, n[1] - aj) })).filter((o) => o.k !== a && o.d <= 36).sort((p, q) => p.d - q.d);
+  let linked = 0;
+  for (const o of cand) {
+    if (!clearLine(ai, aj, seaNodes[o.k][0], seaNodes[o.k][1])) continue;
+    if (seaAdj[a].includes(o.k)) continue;
+    seaLinks.push([a, o.k]); seaAdj[a].push(o.k); seaAdj[o.k].push(a);
+    if (++linked >= 6) break;
+  }
+}
+// keep only the biggest connected body of water
+const seaComp = new Int32Array(seaNodes.length).fill(-1);
+const seaCompSize = [];
+for (let s0 = 0; s0 < seaNodes.length; s0++) {
+  if (seaComp[s0] >= 0) continue;
+  let n = 0; const st = [s0]; seaComp[s0] = seaCompSize.length;
+  while (st.length) { const c = st.pop(); n++; for (const d of seaAdj[c]) if (seaComp[d] < 0) { seaComp[d] = seaCompSize.length; st.push(d); } }
+  seaCompSize.push(n);
+}
+const keepNode = (k) => seaCompSize[seaComp[k]] >= 2; // drop single dots
+const nodeXY = (k) => { const [i, j] = seaNodes[k]; return [mx(lonOf(i) + CELL / 2), my(latOf(j) - CELL / 2)]; };
+function seaPath(pa, pb) { // dijkstra between the port dots of two provinces; returns node list
+  const A = (portsOf.get(pa) ?? []).filter(keepNode), B = (portsOf.get(pb) ?? []).filter(keepNode);
+  if (!A.length || !B.length) return null;
+  const goal = new Set(B);
+  const d = new Map(), prev = new Map(), done = new Set();
+  const hyp = (x, y) => Math.hypot(nodeXY(x)[0] - nodeXY(y)[0], nodeXY(x)[1] - nodeXY(y)[1]);
+  for (const a of A) d.set(a, 0);
+  for (;;) {
+    let cur = -1, best = Infinity;
+    for (const [k, v] of d) if (!done.has(k) && v < best) { best = v; cur = k; }
+    if (cur < 0) return null;
+    if (goal.has(cur)) { const out = [cur]; while (prev.has(out[0])) out.unshift(prev.get(out[0])); return out; }
+    done.add(cur);
+    for (const nb of seaAdj[cur]) { const c = best + hyp(cur, nb); if (c < (d.get(nb) ?? Infinity)) { d.set(nb, c); prev.set(nb, cur); } }
+  }
+}
+// shared-border midpoint for land roads; sea path for ferries
+const viaOf = new Map();
+const near = (p, q) => Math.abs(p[0] - q[0]) < 0.05 && Math.abs(p[1] - q[1]) < 0.05;
+for (const [a, b, kind] of roads) {
+  const k = ek(a, b);
+  if (kind === 'ferry') {
+    const path = seaPath(a, b);
+    if (path) {
+      const pts = path.filter((_, i) => i % 2 === 0 || i === path.length - 1).map(nodeXY);
+      viaOf.set(k, pts.flat());
+    } else if (dist(a, b) > 600) {
+      // Across the map edge (the Pacific): the lane leaves one side and re-enters on the other.
+      const exitX = (i) => (cen(i)[0] < MAP_W / 2 ? 0 : MAP_W);
+      viaOf.set(k, [exitX(a), cen(a)[1], exitX(b), cen(b)[1]]);
+    } else viaOf.set(k, []);
+    continue;
+  }
+  const pa = polygons.get(a), pb = polygons.get(b);
+  const shared = pa.map((p) => pb.some((q) => near(p, q)));
+  // longest cyclic run of shared vertices
+  let bestRun = [], run = [];
+  for (let q = 0; q < pa.length * 2; q++) {
+    const idx = q % pa.length;
+    if (shared[idx]) { run.push(idx); if (run.length > pa.length) break; } else { if (run.length > bestRun.length) bestRun = run; run = []; }
+  }
+  if (run.length > bestRun.length) bestRun = run;
+  if (bestRun.length === 0) { viaOf.set(k, []); continue; }
+  let total = 0; const segs = [];
+  for (let q = 1; q < bestRun.length; q++) { const l = Math.hypot(pa[bestRun[q]][0] - pa[bestRun[q - 1]][0], pa[bestRun[q]][1] - pa[bestRun[q - 1]][1]); segs.push(l); total += l; }
+  let acc = 0, via = pa[bestRun[0]];
+  for (let q = 0; q < segs.length; q++) {
+    if (acc + segs[q] >= total / 2) { const t = segs[q] ? (total / 2 - acc) / segs[q] : 0; const p0 = pa[bestRun[q]], p1 = pa[bestRun[q + 1]]; via = [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t]; break; }
+    acc += segs[q];
+  }
+  viaOf.set(k, via);
+}
+console.log("provinces without a usable port:", seeds.filter((t) => coastal.has(t.idx) && !(portsOf.get(t.idx) ?? []).some(keepNode)).map((t) => t.name).join(", "));
+console.log('ferries without sea path:', roads.filter(([a,b,k]) => k==='ferry' && viaOf.get(ek(a,b)).length===0).map(([a,b])=>seeds[a].name+'-'+seeds[b].name).join(','));
+console.log(`sea dots: ${seaNodes.filter((_, k) => keepNode(k)).length}, ports for ${portsOf.size}/${coastal.size} coastal provinces`);
 
 // ---------- keys and output ----------
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -476,7 +564,15 @@ for (const r of rows) {
   if (a < expect * 0.8) console.warn(`polygon smaller than its cells: ${r.name} ${(a / expect).toFixed(2)}`);
 }
 
-const roadRows = roads.map(([a, b, kind]) => [keyOf(seeds[a]), keyOf(seeds[b]), kind]).sort();
+const r1 = (n) => Math.round(n * 10) / 10;
+const roadRows = roads.map(([a, b, kind]) => [keyOf(seeds[a]), keyOf(seeds[b]), kind, viaOf.get(ek(a, b)).map(r1)]).sort();
+const mainDots = seaNodes.map((_, k) => k).filter(keepNode);
+const remap = new Map(mainDots.map((k, n) => [k, n]));
+const seaOut = {
+  nodes: mainDots.flatMap((k) => nodeXY(k).map(r1)),
+  links: seaLinks.filter(([a, b]) => remap.has(a) && remap.has(b)).flatMap(([a, b]) => [remap.get(a), remap.get(b)]),
+  ports: [...portsOf].filter(([, ks]) => ks.some((k) => remap.has(k))).map(([idx, ks]) => [keyOf(seeds[idx]), ...ks.filter((k) => remap.has(k)).map((k) => remap.get(k))]),
+};
 console.log(`roads: ${roadRows.length} (adjacencies: ${edgeList.length}, ferries ${roadRows.filter((r) => r[2] === 'ferry').length}, highways ${roadRows.filter((r) => r[2] === 'highway').length})`);
 
 const out = `// GENERATED by packages/shared/scripts/generate-map.mjs. Do not edit by hand.
@@ -502,7 +598,10 @@ export interface GeneratedProvince {
 export const GENERATED_PROVINCES: GeneratedProvince[] = ${JSON.stringify(rows)};
 
 /** Roads between neighbouring provinces: [a, b, kind]. Ferries are the long sea lanes between landmasses. */
-export const GENERATED_ROADS: [string, string, 'highway' | 'road' | 'ferry'][] = ${JSON.stringify(roadRows)};
+export const GENERATED_ROADS: [string, string, 'highway' | 'road' | 'ferry', number[]][] = ${JSON.stringify(roadRows)};
+
+/** Dots over the ocean that ships sail along: flat [x,y,...] nodes, flat [a,b,...] links, and the dots each coastal province opens onto. */
+export const GENERATED_SEA: { nodes: number[]; links: number[]; ports: (string | number)[][] } = ${JSON.stringify(seaOut)};
 `;
 writeFileSync(join(here, '..', 'src', 'map-geometry.generated.ts'), out);
 console.log(`provinces: ${rows.length}, size ${(out.length / 1024).toFixed(0)} KB, problems ${problems}`);

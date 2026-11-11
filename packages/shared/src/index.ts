@@ -14,4 +14,6 @@ export * from './research';
 export * from './generals';
 export * from './diplomacy';
 export * from './air';
+export * from './patrol';
+export * from './naval';
 export * from './ai-war';

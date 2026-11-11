@@ -101,7 +101,7 @@ export class CombatService {
       .select()
       .from(formations)
       .where(
-        and(eq(formations.provinceId, province.id), eq(formations.countryId, defender.id), isNull(formations.moveArrivesAt)),
+        and(eq(formations.provinceId, province.id), eq(formations.countryId, defender.id), isNull(formations.moveArrivesAt), isNull(formations.seaNode)),
       );
     const defUnitRows = defFormations.length
       ? await tx

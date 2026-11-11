@@ -17,6 +17,7 @@ export async function addToGarrison(
         eq(formations.countryId, a.countryId),
         eq(formations.name, GARRISON_NAME),
         isNull(formations.moveArrivesAt),
+        isNull(formations.seaNode),
       ),
     );
   const formationId =

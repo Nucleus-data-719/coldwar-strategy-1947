@@ -15,6 +15,8 @@ import { FormationsService } from './military/formations.service';
 import { ProductionService } from './production/production.service';
 import { CombatService } from './military/combat.service';
 import { MovementService } from './military/movement.service';
+import { PatrolService } from './military/patrol.service';
+import { NavalService } from './military/naval.service';
 import { NotificationsService } from './notifications/notifications.service';
 import { PlayersService } from './players/players.service';
 import { SchedulerService } from './scheduler/scheduler.service';
@@ -37,6 +39,8 @@ import { WarsService } from './wars/wars.service';
     DiplomacyService,
     AiWarService,
     MovementService,
+    PatrolService,
+    NavalService,
     FormationsService,
     CampaignsService,
     AiService,

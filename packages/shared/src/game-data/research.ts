@@ -6,7 +6,7 @@ export const RESEARCH_BRANCHES: { id: ResearchBranch; name: string; blurb: strin
   { id: 'infantry', name: 'Infantry & Doctrine', blurb: 'Better tactics: every unit fights harder.' },
   { id: 'armor', name: 'Armour', blurb: 'Tanks, and the doctrine to use them.' },
   { id: 'air', name: 'Air Force', blurb: 'Fighters, bombers and air support.' },
-  { id: 'naval', name: 'Navy', blurb: 'Warships. Production arrives with the navy update.' },
+  { id: 'naval', name: 'Navy', blurb: 'Warships, mines and submarines.' },
   { id: 'industry', name: 'Industry', blurb: 'More output and faster research.' },
 ];
 
@@ -80,10 +80,10 @@ export const TECHS: TechDef[] = [
   tech('air_5', 'air', 5, 'Precision Strike', 'Guided weapons: fewer sorties, more hits.', ['air_4'], { combatPercent: 4 }),
 
   // Navy
-  tech('naval_1', 'naval', 1, 'Destroyers', 'Fast escorts. Production arrives with the navy update.', [], { unlock: ['destroyer'] }),
-  tech('naval_2', 'naval', 2, 'Submarines', 'Ocean-going submarines. Production arrives with the navy update.', ['naval_1'], { unlock: ['submarine'] }),
-  tech('naval_3', 'naval', 3, 'Cruisers', 'Heavy surface escorts. Production arrives with the navy update.', ['naval_2', 'ind_2'], { unlock: ['cruiser'] }),
-  tech('naval_4', 'naval', 4, 'Battleships', 'Capital ships. Production arrives with the navy update.', ['naval_3'], { unlock: ['battleship'] }),
+  tech('naval_1', 'naval', 1, 'Destroyers and Corvettes', 'Fast escorts that hunt submarines and lay mines.', [], { unlock: ['destroyer', 'corvette'] }),
+  tech('naval_2', 'naval', 2, 'Submarines', 'Submarines: hidden from most ships, they lay mines and strike close.', ['naval_1'], { unlock: ['submarine'] }),
+  tech('naval_3', 'naval', 3, 'Cruisers', 'Heavy surface escorts.', ['naval_2', 'ind_2'], { unlock: ['cruiser'] }),
+  tech('naval_4', 'naval', 4, 'Battleships', 'Capital ships that shell the enemy from two sea lanes away.', ['naval_3'], { unlock: ['battleship'] }),
   tech('naval_5', 'naval', 5, 'Sonar and Missiles', 'Detect submarines, and answer them.', ['naval_4'], { combatPercent: 4 }),
 
   // Industry

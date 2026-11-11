@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PROVINCES, PROVINCE_BY_KEY, ROADS, planRoute, roadBetween } from './index';
+import { PROVINCES, PROVINCE_BY_KEY, ROADS, SEA_DOTS, hasPort, planRoute, roadBetween, roadPath, seaRoute } from './index';
 
 const components = (edges: (p: (typeof PROVINCES)[number]) => string[]) => {
   const seen = new Set<string>();
@@ -27,10 +27,8 @@ describe('roads', () => {
     }
   });
 
-  it('is sparser than the border graph but keeps the map as connected', () => {
-    const adjacencyEdges = PROVINCES.reduce((s, p) => s + p.adjacent.length, 0) / 2;
-    expect(ROADS.length).toBeLessThan(adjacencyEdges);
-    expect(components((p) => p.roads)).toBe(components((p) => p.adjacent));
+  it('every pair of neighbouring provinces has a road', () => {
+    for (const p of PROVINCES) for (const n of p.adjacent) expect(roadBetween(p.key, n)).toBeDefined();
   });
 
   it('every province has at least one road', () => {
@@ -59,17 +57,17 @@ describe('roads', () => {
     for (const code of codes) expect(parts(code, (p) => p.roads)).toBe(parts(code, (p) => p.adjacent));
   });
 
-  it('limits crossings between two countries (ferries aside) so borders have chokepoints', () => {
-    const count = new Map<string, number>();
+  it('land roads pass through the border between the two provinces, not across open water', () => {
     for (const r of ROADS) {
       if (r.kind === 'ferry') continue;
-      const a = PROVINCE_BY_KEY[r.a].countryCode;
-      const b = PROVINCE_BY_KEY[r.b].countryCode;
-      if (a === b) continue;
-      const k = [a, b].sort().join('|');
-      count.set(k, (count.get(k) ?? 0) + 1);
+      const pts = roadPath(r.a, r.b);
+      expect(pts.length).toBe(3);
     }
-    for (const n of count.values()) expect(n).toBeLessThanOrEqual(2);
+  });
+
+  it('ferries follow the sea dots', () => {
+    const ferry = ROADS.filter((r) => r.kind === 'ferry' && r.via.length >= 4);
+    expect(ferry.length).toBeGreaterThan(5);
   });
 
   it('land routes use only roads, and highways are quicker than roads', () => {
@@ -86,15 +84,17 @@ describe('roads', () => {
     expect(secs(hw)).toBeLessThan(secs(plain) * 1.0001);
   });
 
-  it('ships and aircraft are not limited to roads', () => {
+  it('ships sail along the sea dots from port to port', () => {
+    expect(SEA_DOTS.length).toBeGreaterThan(500);
+    const route = seaRoute('new_york', 'london')!;
+    expect(route).not.toBeNull();
+    expect(route.points.length).toBeGreaterThan(4);
     const owner = new Map(PROVINCES.map((p) => [p.key, 'me']));
-    const base = { countryId: 'me', ownerByKey: owner, atWarWith: new Set<string>(), railwayKeys: new Set<string>(), speed: 1, gameSpeed: 1 };
-    // Find neighbours with no road between them: flying is one hop, driving takes a detour.
-    const gap = PROVINCES.flatMap((p) => p.adjacent.filter((n) => !p.roads.includes(n)).map((n) => [p.key, n] as const))[0];
-    expect(gap).toBeDefined();
-    const flying = planRoute(gap[0], gap[1], base)!;
-    const driving = planRoute(gap[0], gap[1], { ...base, useRoads: true })!;
-    expect(flying.path.length).toBe(2);
-    expect(driving.path.length).toBeGreaterThan(2);
+    const ctx = { countryId: 'me', ownerByKey: owner, atWarWith: new Set<string>(), railwayKeys: new Set<string>(), speed: 1, gameSpeed: 1, coastalOnly: true };
+    const plan = planRoute('new_york', 'london', ctx)!;
+    expect(plan.path).toEqual(['new_york', 'london']);
+    expect(plan.totalSeconds).toBeGreaterThan(3600);
+    expect(hasPort('chicago')).toBe(false);
+    expect(planRoute('new_york', 'chicago', ctx)).toBeNull();
   });
 });

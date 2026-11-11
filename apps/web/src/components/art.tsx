@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { unitArtUrls } from './unit-art';
 import type { BuildingType, UnitType } from '@cw/shared';
 
 /**
@@ -74,6 +75,14 @@ const UNIT_ART: Record<UnitType, ReactNode> = {
       <path d="M6 20.5c2 .9 3 .9 5 0s3-.9 5 0 3 .9 4 .3" stroke="currentColor" strokeWidth="1.2" fill="none" />
     </>
   ),
+  corvette: (
+    <>
+      <path d="M2.5 15h19l-2.6 3.8H5.2z" />
+      <path d="M9 15v-3h3.2v3M14 15v-4.4h1.8V15" />
+      <path d="M4.6 13.2l3.6 1.8" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M6 20.4c2 .8 3 .8 5 0s3-.8 5 0 3 .8 4 .3" stroke="currentColor" strokeWidth="1.2" fill="none" />
+    </>
+  ),
   cruiser: (
     <>
       <path d="M1 14h22l-3.2 4.8H4.2z" />
@@ -93,6 +102,22 @@ const UNIT_ART: Record<UnitType, ReactNode> = {
 };
 
 export function UnitIcon({ type, size = 22 }: { type: UnitType; size?: number }) {
+  // Use the artwork in public/units when present; otherwise the drawn silhouette.
+  const urls = unitArtUrls(type);
+  const [tried, setTried] = useState(0);
+  if (tried < urls.length) {
+    return (
+      <img
+        className="unit-art"
+        src={urls[tried]}
+        width={size}
+        height={size}
+        alt=""
+        draggable={false}
+        onError={() => setTried(tried + 1)}
+      />
+    );
+  }
   return (
     <svg className="unit-icon" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       {UNIT_ART[type]}

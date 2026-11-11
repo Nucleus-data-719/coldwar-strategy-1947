@@ -233,3 +233,48 @@ No database changes this week.
 * **Cancel orders**: an army heading into its own land finishes the current leg and halts. An army about to attack turns back instead and returns to the province it left.
 * Not in this week: aircraft patrol and attack orders (Week 13), naval orders and ranges (Week 14), buildings drawn on provinces and enemy armies on the map (Week 15).
 * No database changes. Restart the server.
+
+### Unit artwork (included)
+All 11 unit images are already included (cut out of your JPGs). To replace one, put a transparent PNG in `apps/web/public/units/` (names in the README.txt there: `infantry.png`, `artillery.png`, `light_tank.png`, `heavy_tank.png` (or one `tank.png`), `fighter.png`, `bomber.png`, `air_support.png`, `submarine.png`, `destroyer.png`, `cruiser.png`, `battleship.png`). When a file exists it replaces the drawn figure on the map tokens and in the panels; missing files fall back to the drawn ones, so they can be added one at a time.
+
+## Week 12 follow-up (roads, sea lanes, army panel)
+- Every pair of neighbouring provinces now has a road. Roads run through the border crossing of the two provinces (never across open water) and are drawn faint; highways (out of capitals) are a little stronger.
+- Railways: once two neighbouring provinces both have a finished Railway, the road between them is drawn as a railway (dark bed, sleepers, two rails) and travel between them takes half the time.
+- Sea lanes: a net of dots covers the oceans (shown when a ship is selected or a sea order is planned). Ships sail from port to port along the dots, ferries follow them too. Every coastal province has a harbour dot.
+- Selecting an army shows only the army panel (Move / Attack, Cancel orders); close it to return to the province tabs.
+- Regenerate the map after changing `map-source.mjs`: `node packages/shared/scripts/generate-map.mjs`.
+- No SQL changes. Restart the server (shared movement code changed).
+
+## Week 13: air orders
+**Run `docs/week13.sql` in the Neon SQL editor before restarting the server** (adds patrol columns to `formations` and a `damage` column to `buildings`).
+
+- Select an air force on the map, press **Move / Attack / Patrol…**, then choose **Attack / Move** (fly to a province; over an enemy province this is a strike and a battle, as before) or **Patrol**.
+- A mixed army (for example a Garrison with aircraft in it): set the land units to 0 in the order panel to give the aircraft an air order. The aircraft split off as a new task force.
+- **Patrol** sends the aircraft straight to a province (within 800 map units) and they circle there until you press **Cancel patrol**. The patrol circle is drawn on the map (fighters radius 100, air support 90, bombers 80; a mixed force uses its shortest range).
+- Every game hour, inside the circle: enemy armies (countries you are at war with, wherever they stand) lose units, more from bombers and air support than from fighters, spread thinner over many armies; enemy buildings in enemy provinces take bomb damage (bombers most); enemy aircraft fight yours.
+- Your aircraft lose units to air defence only over enemy-owned provinces (more with more enemy troops there) and to enemy fighters. Over friendly or neutral land only dogfights hurt them, and only enemies are ever hurt.
+- Buildings at 50% damage or more stop working (production, railways) until repaired; at 100% they are destroyed. Repair is 1% per game hour once left alone.
+- Out of range, or a force with land units, cannot patrol. Aircraft that lose all units are removed.
+- AI armies do not use patrols yet (Week 15).
+
+## Week 14: naval orders and ranges
+**Run `docs/week14.sql` in the Neon SQL editor before restarting the server** (fleet position columns on `formations`, new `sea_mines` table).
+
+- **Ships now stop anywhere on the ocean.** A fleet has a position on the sea dots. Select it, press **Sail / Attack…**, then: click one of your harbours (sail there and dock), **right-click open ocean** (sail to the nearest dot), or **right-click a red enemy fleet** (attack). The planned route is drawn white; the voyage is drawn dashed. **Cancel orders** stops the fleet where it is. Fleets at sea cannot be split or merged; split in port.
+- **Engagement range** (steps along the dots): submarines 0 (must be on top of the enemy), destroyers 1, corvettes 1 (new unit, researched with the destroyer), cruisers 1, battleships 2. A fleet attacking closes in until *every* ship can fire (its shortest range). Only ships in range fire: a battleship at 2 steps shells a destroyer that cannot answer. With a fleet selected, dots within range are lit (gold = whole fleet in range, pale blue = battleship-only reach).
+- **Submarines:** battleships (×0.25) and cruisers (×0.5) are bad at hitting them; destroyers and corvettes (×1.5) are good. A fleet made only of submarines is invisible to the enemy unless a destroyer or corvette is within 3 steps.
+- **Seeing the enemy:** you see enemy fleets within 3 steps of your ships at sea, and within 2 steps of your own harbours. They appear as red circles with the ship count. If the target moves out of reach before you arrive, contact is lost.
+- **Mines:** a fleet holding position at sea with submarines, destroyers or corvettes can **Lay mines** (10 money + 20 steel per ship). Strength 3 per ship, up to 20; lasts 72 game hours. Enemy fleets (countries at war with you) sailing through lose up to 4% of ships per strength point (max 35%); destroyers and corvettes halve it. Each hit weakens the field. You always see your own mines; enemy mines show up only within 1 step of your destroyers/corvettes.
+- Ships can attack ships only (not land). Land and air formations are unchanged. AI fleets still use the older harbour-to-harbour movement (Week 15).
+- Corvettes use the destroyer picture until you add `apps/web/public/units/corvette.png`.
+
+## Week 14 follow-up: order bar, route lines, railways, delay
+**Run the two new lines at the bottom of `docs/week14.sql`** (`move_hold_until`, `move_hold_fraction`; run the whole file if you have not run it yet).
+
+- **Order bar** (like Conflict of Nations): select an army and a bar appears at the bottom of the map with **Move**, **Attack**, **Waypoint**, **Delay**, **Cancel Orders** (ships: **Sail**, **Naval attack**, **Lay mines**), and an army panel with strength, speed, units, current position, destination, estimated travel time and arrival clock time. The old side-panel army card is gone; the side panel opens only to plan an order.
+- **Move** must stay on your own land; **Attack** must end in enemy land. Right-clicking a province picks Move or Attack automatically.
+- **Waypoint**: while an army is marching, add another stop; it first reaches the earlier destination, then continues.
+- **Delay**: opens the *Delay movement* window. Pick 0–24 game hours; the army stops where it stands, and its whole route arrives that much later. *Cancel Delay* releases it. Several armies delayed by different amounts can be timed to arrive together.
+- **Route lines**: every moving army has a thin steel-blue line with an arrow at its destination. Hover or select an army and its line turns into a wider blue track with white dashes marching to the arrow.
+- **Roads** are now very faint; **railways** are drawn Supremacy-style: a thin outline, closely spaced dark ties and two light rails, so they are clearly not roads.
+- Not included: Loadout and Rush (skipped as requested).

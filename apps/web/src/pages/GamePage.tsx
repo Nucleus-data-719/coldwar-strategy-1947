@@ -9,14 +9,15 @@ import { EconomyPanel } from '../features/economy/EconomyPanel';
 import { Crest, Icon, type IconName } from '../components/Icon';
 import { Flag } from '../components/art';
 import { Tutorial, isTutorialDismissed, type StepId } from '../features/tutorial/Tutorial';
-import { SUPPLY_PENALTY_PERCENT } from '@cw/shared';
+import { SUPPLY_PENALTY_PERCENT, UNITS, type FormationDto } from '@cw/shared';
 import { SoundControls } from '../components/SoundControls';
 import { playSfx, sfxForNotification } from '../services/audio';
 import { verdict } from '../features/military/BattlesPanel';
 import { NotificationsPanel, useUnreadCount } from '../features/economy/NotificationsPanel';
-import { ArmyCard } from '../features/military/ArmyCard';
+import { ArmyBar, type OrderKind } from '../features/military/ArmyBar';
 import { ArmiesPanel } from '../features/military/ArmiesPanel';
 import { MovePanel } from '../features/military/MovePanel';
+import { NavalPanel } from '../features/military/NavalPanel';
 import { BattlesPanel } from '../features/military/BattlesPanel';
 import { FeedbackButton } from '../features/feedback/FeedbackButton';
 import { ResearchPanel } from '../features/research/ResearchPanel';
@@ -94,6 +95,13 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
   const [moveFormationId, setMoveFormationId] = useState<string | null>(null);
   const [dest, setDest] = useState<string | null>(null);
   const [previewPath, setPreviewPath] = useState<string[] | null>(null);
+  const [previewPatrol, setPreviewPatrol] = useState<{ key: string; radius: number } | null>(null);
+  // Naval orders: the order panel for ships, an open-sea dot, an enemy fleet, and the planned sea route.
+  const [navalMode, setNavalMode] = useState(false);
+  const [orderKind, setOrderKind] = useState<OrderKind>('move');
+  const [seaDest, setSeaDest] = useState<number | null>(null);
+  const [enemyTarget, setEnemyTarget] = useState<string | null>(null);
+  const [previewSea, setPreviewSea] = useState<number[] | null>(null);
 
   const { data: state, error, dataUpdatedAt } = useQuery({
     queryKey: ['state', campaignId],
@@ -144,8 +152,18 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
 
   const moveFormation = state?.formations.find((f) => f.id === moveFormationId) ?? null;
   const selectedArmy = state?.formations.find((f) => f.id === armyId) ?? null;
+  // With an army selected the side panel shows only that army, like the army screen in Supremacy.
+  const armyMode = !!(moveFormation || selectedArmy);
 
-  const startMove = (formationId: string) => {
+  const hasShips = (f?: FormationDto | null) => !!f && f.units.some((u) => UNITS[u.unitType].category === 'naval');
+  const navalFirst = (f?: FormationDto | null) => !!f && hasShips(f) && (!!f.sea || f.units.every((u) => UNITS[u.unitType].category === 'naval'));
+  const startMove = (formationId: string, naval?: boolean, kind: OrderKind = 'move') => {
+    setOrderKind(kind);
+    const f = state?.formations.find((x) => x.id === formationId);
+    setNavalMode(naval ?? navalFirst(f));
+    setSeaDest(null);
+    setEnemyTarget(null);
+    setPreviewSea(null);
     setTab('world');
     setDrawerOpen(true);
     setDrawerTab('province');
@@ -155,6 +173,9 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
     setPreviewPath(null);
   };
   const cancelMove = () => {
+    setSeaDest(null);
+    setEnemyTarget(null);
+    setPreviewSea(null);
     setMoveFormationId(null);
     setDest(null);
     setPreviewPath(null);
@@ -163,7 +184,11 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
   // In move mode a map click chooses the destination instead of selecting a province.
   const handleMapSelect = (key: string | null) => {
     if (moveFormation) {
-      if (key) setDest(key);
+      if (key) {
+        setDest(key);
+        setSeaDest(null);
+        setEnemyTarget(null);
+      }
       return;
     }
     setArmyId(null);
@@ -187,6 +212,14 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
   const orderArmy = (key: string) => {
     const id = moveFormationId ?? armyId;
     if (!id) return;
+    const f0 = state?.formations.find((x) => x.id === id);
+    setNavalMode(moveFormationId ? navalMode : navalFirst(f0));
+    if (!moveFormationId) {
+      const owner = state?.provinces.find((p) => p.key === key)?.ownerCountryId;
+      setOrderKind(owner && state?.atWarWith.includes(owner) ? 'attack' : 'move');
+    }
+    setSeaDest(null);
+    setEnemyTarget(null);
     setTab('world');
     setDrawerOpen(true);
     setDrawerTab('province');
@@ -194,6 +227,40 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
     setArmyId(id);
     setDest(key);
     setPreviewPath(null);
+  };
+
+  // Right-click on open sea / an enemy fleet with a fleet selected: plan a sail or attack order.
+  const orderSea = (node: number) => {
+    const id = moveFormationId ?? armyId;
+    const f0 = state?.formations.find((x) => x.id === id);
+    if (!id || !hasShips(f0)) return;
+    setTab('world');
+    setDrawerOpen(true);
+    setDrawerTab('province');
+    setNavalMode(true);
+    setMoveFormationId(id);
+    setArmyId(id);
+    setDest(null);
+    setEnemyTarget(null);
+    setSeaDest(node);
+  };
+  const orderEnemy = (enemyId: string) => {
+    const id = moveFormationId ?? armyId;
+    const f0 = state?.formations.find((x) => x.id === id);
+    if (!id || !hasShips(f0)) return;
+    setTab('world');
+    setDrawerOpen(true);
+    setDrawerTab('province');
+    setNavalMode(true);
+    setMoveFormationId(id);
+    setArmyId(id);
+    setDest(null);
+    setSeaDest(null);
+    setEnemyTarget(enemyId);
+  };
+  const clickEnemy = (enemyId: string) => {
+    const f0 = state?.formations.find((x) => x.id === (moveFormationId ?? armyId));
+    if (hasShips(f0)) orderEnemy(enemyId);
   };
 
   if (error) {
@@ -309,6 +376,15 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                 formations={state.formations}
                 clockOffsetMs={clockOffsetMs}
                 previewPath={previewPath}
+                previewPatrol={previewPatrol}
+                previewNaval={!!moveFormation && navalMode}
+                enemies={state.enemies}
+                mines={state.mines}
+                onEnemyClick={clickEnemy}
+                onEnemyOrder={orderEnemy}
+                onSeaOrder={orderSea}
+                previewSea={previewSea}
+                selectedEnemyId={enemyTarget}
                 relationByCountry={relationByCountry}
                 selectedArmyId={armyId}
                 onArmyClick={clickArmy}
@@ -350,45 +426,80 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                   : 'Drag to pan · scroll to zoom · click a province or an army · right-click to order'}
               </div>
             </div>
-            {drawerOpen && (
+            {selectedArmy && (
+              <ArmyBar
+                key={selectedArmy.id}
+                campaignId={campaignId}
+                state={state}
+                formation={selectedArmy}
+                active={moveFormation ? { kind: orderKind, naval: navalMode } : null}
+                onOrder={(kind, naval) => startMove(selectedArmy.id, naval, kind)}
+                onClose={() => {
+                  cancelMove();
+                  setArmyId(null);
+                }}
+              />
+            )}
+            {drawerOpen && !(selectedArmy && !moveFormation) && (
               <aside className="drawer" aria-label="Details">
                 <div className="drawer-head">
-                  <div className="seg" role="tablist">
-                    {DRAWER_TABS.map((t) => (
-                      <button
-                        key={t.id}
-                        role="tab"
-                        className={drawerTab === t.id ? 'active' : ''}
-                        onClick={() => setDrawerTab(t.id)}
-                      >
-                        {t.label}
-                        {t.id === 'alerts' && unread > 0 && <span className="badge">{unread}</span>}
-                      </button>
-                    ))}
-                  </div>
-                  <button className="ghost icon" aria-label="Close panel" data-tip="Close" data-tip-pos="below" onClick={() => setDrawerOpen(false)}>
+                  {armyMode ? (
+                    <strong className="drawer-title">Army</strong>
+                  ) : (
+                    <div className="seg" role="tablist">
+                      {DRAWER_TABS.map((t) => (
+                        <button
+                          key={t.id}
+                          role="tab"
+                          className={drawerTab === t.id ? 'active' : ''}
+                          onClick={() => setDrawerTab(t.id)}
+                        >
+                          {t.label}
+                          {t.id === 'alerts' && unread > 0 && <span className="badge">{unread}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    className="ghost icon"
+                    aria-label="Close panel"
+                    data-tip="Close"
+                    data-tip-pos="below"
+                    onClick={() => {
+                      if (armyMode) {
+                        cancelMove();
+                        setArmyId(null);
+                      } else setDrawerOpen(false);
+                    }}
+                  >
                     <Icon name="close" />
                   </button>
                 </div>
                 <div className="drawer-body">
-                  {drawerTab === 'province' &&
-                    (moveFormation ? (
+                  {(armyMode || drawerTab === 'province') &&
+                    (moveFormation && navalMode ? (
+                      <NavalPanel
+                        key={moveFormation.id}
+                        campaignId={campaignId}
+                        state={state}
+                        formation={moveFormation}
+                        dest={dest}
+                        seaDest={seaDest}
+                        enemyId={enemyTarget}
+                        onPreviewSea={setPreviewSea}
+                        onClose={cancelMove}
+                      />
+                    ) : moveFormation ? (
                       <MovePanel
                         key={moveFormation.id}
                         campaignId={campaignId}
                         state={state}
                         formation={moveFormation}
                         dest={dest}
+                        kind={orderKind}
                         onPreview={setPreviewPath}
+                        onPatrolPreview={setPreviewPatrol}
                         onClose={cancelMove}
-                      />
-                    ) : selectedArmy ? (
-                      <ArmyCard
-                        key={selectedArmy.id}
-                        campaignId={campaignId}
-                        formation={selectedArmy}
-                        onOrder={() => startMove(selectedArmy.id)}
-                        onDeselect={() => setArmyId(null)}
                       />
                     ) : selected ? (
                       <ProvincePanel
@@ -407,7 +518,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                         </p>
                       </div>
                     ))}
-                  {drawerTab === 'armies' && (
+                  {!armyMode && drawerTab === 'armies' && (
                     <ArmiesPanel
                       campaignId={campaignId}
                       formations={state.formations}
@@ -416,8 +527,8 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                       onFocus={selectProvince}
                     />
                   )}
-                  {drawerTab === 'battles' && <BattlesPanel campaignId={campaignId} myCountryId={state.me.countryId} />}
-                  {drawerTab === 'alerts' && <NotificationsPanel campaignId={campaignId} />}
+                  {!armyMode && drawerTab === 'battles' && <BattlesPanel campaignId={campaignId} myCountryId={state.me.countryId} />}
+                  {!armyMode && drawerTab === 'alerts' && <NotificationsPanel campaignId={campaignId} />}
                 </div>
               </aside>
             )}

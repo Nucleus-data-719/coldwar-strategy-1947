@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BUILDINGS,
+  BUILDING_KNOCKED_OUT,
   BUILDING_TYPES,
   CAPITAL_MOVE_COST,
   CAPITAL_MOVE_SECONDS,
@@ -175,7 +176,13 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
             <li key={b.type}>
               <span className="with-icon"><BuildingIcon type={b.type} size={18} /> {BUILDINGS[b.type].name}</span>
               <span className="muted small">
-                {b.status === 'complete' ? 'Complete' : `Building… ${formatDuration(left)}`}
+                {b.status !== 'complete'
+                  ? `Building… ${formatDuration(left)}`
+                  : b.damage >= BUILDING_KNOCKED_OUT
+                    ? `Knocked out by air raids (${b.damage}% damage)`
+                    : b.damage > 0
+                      ? `Complete · ${b.damage}% damaged`
+                      : 'Complete'}
               </span>
             </li>
           );

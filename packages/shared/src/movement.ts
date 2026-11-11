@@ -1,5 +1,5 @@
 import { UNITS } from './game-data/units';
-import { PROVINCE_BY_KEY, roadBetween, type RoadKind } from './map-data';
+import { PROVINCE_BY_KEY, hasPort, roadBetween, roadPath, seaRoute, type RoadKind } from './map-data';
 import type { Terrain, UnitType } from './types';
 
 /** Travel-time multiplier for entering a province of this terrain. */
@@ -48,10 +48,25 @@ export function legSeconds(
   railway: boolean,
   gameSpeed: number,
   roadMult = 1,
+  sea = false,
 ): number {
   const a = PROVINCE_BY_KEY[fromKey];
   const b = PROVINCE_BY_KEY[toKey];
-  const distance = Math.hypot(a.center.x - b.center.x, a.center.y - b.center.y);
+  let distance = Math.hypot(a.center.x - b.center.x, a.center.y - b.center.y);
+  if (sea) {
+    // ships follow the dots over the ocean
+    distance = seaRoute(fromKey, toKey)?.length ?? distance;
+    const hoursAtSea = distance / MAP_UNITS_PER_PROVINCE / speed;
+    return Math.max(1, Math.round((hoursAtSea * 3600) / gameSpeed));
+  }
+  if (roadBetween(fromKey, toKey) === 'ferry') {
+    const pts = roadPath(fromKey, toKey);
+    distance = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const seg = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      if (seg < 1000) distance += seg; // a lane that leaves one map edge and re-enters on the other does not count the jump
+    }
+  }
   let hours = ((distance / MAP_UNITS_PER_PROVINCE) * TERRAIN_MOVE_MULT[b.terrain]) / speed;
   if (railway) hours *= RAILWAY_MOVE_MULT;
   hours *= roadMult;
@@ -106,7 +121,7 @@ const hasRail = (ctx: RouteContext, a: string, b: string) => ctx.railwayKeys.has
 
 const canEnter = (ctx: RouteContext, key: string) =>
   relationOf(ctx.ownerByKey.get(key), ctx.countryId, ctx.atWarWith) !== 'blocked' &&
-  (!ctx.coastalOnly || PROVINCE_BY_KEY[key]?.isCoastal === true);
+  (!ctx.coastalOnly || hasPort(key));
 
 /**
  * Fastest route over province adjacency (Dijkstra on travel time).
@@ -119,6 +134,13 @@ export function planRoute(startKey: string, goalKey: string, ctx: RouteContext):
   if (!PROVINCE_BY_KEY[startKey] || !PROVINCE_BY_KEY[goalKey]) return null;
   if (!canEnter(ctx, goalKey)) return null;
   if (startKey === goalKey) return { path: [startKey], legSeconds: [], totalSeconds: 0 };
+
+  if (ctx.coastalOnly) {
+    // Ships sail straight from port to port along the sea dots.
+    if (!seaRoute(startKey, goalKey)) return null;
+    const secs = legSeconds(startKey, goalKey, ctx.speed, false, ctx.gameSpeed, 1, true);
+    return { path: [startKey, goalKey], legSeconds: [secs], totalSeconds: secs };
+  }
 
   const dist = new Map<string, number>([[startKey, 0]]);
   const prev = new Map<string, string>();
@@ -175,6 +197,8 @@ export interface AdvanceInput {
   railwayKeys: ReadonlySet<string>;
   /** Land forces: legs are timed by road kind. */
   useRoads?: boolean;
+  /** Ships: legs follow the sea dots. */
+  coastalOnly?: boolean;
 }
 
 export type AdvanceResult =
@@ -216,7 +240,7 @@ export function advanceMovement(i: AdvanceInput): AdvanceResult {
     if (path.length === 0) return { status: 'arrived', locationKey: location };
     next = path.shift()!;
     const rail = i.railwayKeys.has(location) && i.railwayKeys.has(next);
-    const legArrives = arrivedAt + legSeconds(location, next, i.speed, rail, i.gameSpeed, roadMultFor(i.useRoads, location, next)) * 1000;
+    const legArrives = arrivedAt + legSeconds(location, next, i.speed, rail, i.gameSpeed, roadMultFor(i.useRoads, location, next), i.coastalOnly) * 1000;
     if (legArrives > i.now) {
       return {
         status: 'moving',

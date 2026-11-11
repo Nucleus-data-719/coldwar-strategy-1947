@@ -144,6 +144,9 @@ export const buildings = pgTable(
     startedAt: ts('started_at').notNull().defaultNow(),
     completesAt: ts('completes_at').notNull(),
     nextActionAt: ts('next_action_at'),
+    // Bomb damage (0-100) and when it last changed (repairs run from there).
+    damage: integer('damage').notNull().default(0),
+    damageUpdatedAt: ts('damage_updated_at'),
   },
   (t) => [
     uniqueIndex('buildings_province_type_idx').on(t.provinceId, t.type),
@@ -173,14 +176,50 @@ export const formations = pgTable(
     movePath: jsonb('move_path').$type<string[]>().notNull().default([]),
     moveStartedAt: ts('move_started_at'),
     moveArrivesAt: ts('move_arrives_at'),
+    // Air patrol: `movePatrol` means the current flight ends in a patrol; `patrolActive` means the
+    // aircraft are holding one over `provinceId`. Effects are settled up to `patrolSettledAt`.
+    movePatrol: boolean('move_patrol').notNull().default(false),
+    patrolActive: boolean('patrol_active').notNull().default(false),
+    patrolSince: ts('patrol_since'),
+    patrolSettledAt: ts('patrol_settled_at'),
+    // Naval: `seaNode` is the open-sea dot the fleet is at (or, during a voyage, left from); null when in port.
+    // A voyage follows the dots in `seaPath` and ends at `seaArrivesAt`, in port `seaDestProvinceId` if set.
+    // A delayed army waits where it is until `moveHoldUntil`; `moveHoldFraction` is how far along the leg it stands.
+    moveHoldUntil: ts('move_hold_until'),
+    moveHoldFraction: doublePrecision('move_hold_fraction'),
+    seaNode: integer('sea_node'),
+    seaPath: jsonb('sea_path').$type<number[]>().notNull().default([]),
+    seaStartedAt: ts('sea_started_at'),
+    seaArrivesAt: ts('sea_arrives_at'),
+    seaDestProvinceId: uuid('sea_dest_province_id').references(() => provinces.id, { onDelete: 'set null' }),
+    attackTargetId: uuid('attack_target_id'),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
   (t) => [
+    index('formations_sea_idx').on(t.seaArrivesAt),
     index('formations_province_idx').on(t.provinceId),
     index('formations_country_idx').on(t.countryId),
     index('formations_move_idx').on(t.moveArrivesAt),
   ],
 );
+
+export const seaMines = pgTable(
+  'sea_mines',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    countryId: uuid('country_id')
+      .notNull()
+      .references(() => countries.id, { onDelete: 'cascade' }),
+    node: integer('node').notNull(),
+    strength: integer('strength').notNull(),
+    expiresAt: ts('expires_at').notNull(),
+  },
+  (t) => [index('sea_mines_campaign_idx').on(t.campaignId, t.node)],
+);
+export type SeaMineRow = typeof seaMines.$inferSelect;
 
 export const formationUnits = pgTable(
   'formation_units',

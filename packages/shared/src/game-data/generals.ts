@@ -7,7 +7,7 @@ export const GENERAL_CATEGORIES: { id: GeneralCategory; name: string; blurb: str
   { id: 'infantry', name: 'Infantry', blurb: 'Bonus when the army contains infantry or artillery.', units: ['infantry', 'artillery'], ability: 'Hold the Line' },
   { id: 'armor', name: 'Armor', blurb: 'Bonus when the army contains tanks.', units: ['light_tank', 'heavy_tank'], ability: 'Armoured Thrust' },
   { id: 'air', name: 'Air', blurb: 'Bonus when the army contains aircraft (aircraft arrive in the air update).', units: ['fighter', 'bomber', 'air_support'], ability: 'Air Superiority' },
-  { id: 'naval', name: 'Naval', blurb: 'Bonus when the force contains ships (ships arrive in the navy update).', units: ['submarine', 'destroyer', 'cruiser', 'battleship'], ability: 'Sea Control' },
+  { id: 'naval', name: 'Naval', blurb: 'Bonus when the force contains ships.', units: ['submarine', 'corvette', 'destroyer', 'cruiser', 'battleship'], ability: 'Sea Control' },
   { id: 'strategist', name: 'Strategist', blurb: 'Bonus for any army.', units: 'all', ability: 'Master Plan' },
 ];
 

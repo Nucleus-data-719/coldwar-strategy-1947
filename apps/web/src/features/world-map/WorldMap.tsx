@@ -1,14 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import { Application, Container, Graphics, Rectangle, Text } from 'pixi.js';
+import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, type Texture } from 'pixi.js';
+import { unitArtUrls } from '../../components/unit-art';
 import { TOKEN_BOTTOM, TOKEN_HALF_WIDTH, TOKEN_TOP, drawToken, formationClass } from './army-token';
 import { drawResourceIcon, resourceIconsFor } from './resource-icons';
+import { JUMP, legPolyline, routePolyline, splitAt } from './route-geometry';
+import type { Point } from '@cw/shared';
 import {
   MAP_HEIGHT,
   MAP_WIDTH,
   PROVINCES,
   PROVINCE_BY_KEY,
   ROADS,
+  SEA_DOTS,
+  roadPath,
+  fleetRange,
+  hopsFrom,
+  nearestSeaNode,
+  seaRange,
+  type EnemyFleetDto,
   type FormationDto,
+  type SeaMineDto,
   type StateCountry,
   type StateProvince,
 } from '@cw/shared';
@@ -83,6 +94,10 @@ interface Props {
   clockOffsetMs: number;
   /** Route being previewed while giving a move order. */
   previewPath: string[] | null;
+  /** The previewed route is a sea route (ships follow the dots). */
+  previewNaval?: boolean;
+  /** Circle of an air patrol being planned. */
+  previewPatrol?: { key: string; radius: number } | null;
   /** Diplomacy overlay: relation stage of each country towards you (allied, friendly, neutral, ...). */
   relationByCountry?: Record<string, string>;
   /** Supply overlay: true when some resource your armies need has run out. */
@@ -93,6 +108,17 @@ interface Props {
   onArmyClick?: (id: string) => void;
   /** Right-click on a province: order the selected army there. */
   onOrder?: (key: string) => void;
+  /** Enemy fleets you can see and mine fields you know of. */
+  enemies?: EnemyFleetDto[];
+  mines?: SeaMineDto[];
+  /** An enemy fleet was clicked / right-clicked (right-click orders an attack). */
+  onEnemyClick?: (id: string) => void;
+  onEnemyOrder?: (id: string) => void;
+  /** Right-click on open sea: sail the selected fleet to the nearest dot. */
+  onSeaOrder?: (node: number) => void;
+  /** Open-sea route being planned (dots), drawn as a white line. */
+  previewSea?: number[] | null;
+  selectedEnemyId?: string | null;
 }
 
 interface Shape {
@@ -108,6 +134,35 @@ interface Ctx {
   world: Container;
   shapes: Map<string, Shape>;
   dispose: () => void;
+}
+
+/** Unit artwork loaded from public/units, shared by every token. null = not available, use the drawn figure. */
+const unitTextures = new Map<string, Texture | null>();
+const unitTextureLoading = new Set<string>();
+function requestUnitTexture(unitType: string) {
+  if (unitTextures.has(unitType) || unitTextureLoading.has(unitType)) return;
+  unitTextureLoading.add(unitType);
+  void (async () => {
+    for (const url of unitArtUrls(unitType as Parameters<typeof unitArtUrls>[0])) {
+      try {
+        const res = await fetch(url, { method: 'HEAD' });
+        if (!res.ok || !(res.headers.get('content-type') ?? '').startsWith('image/')) continue;
+        unitTextures.set(unitType, (await Assets.load(url)) as Texture);
+        return;
+      } catch {
+        /* try the next candidate */
+      }
+    }
+    unitTextures.set(unitType, null);
+  })();
+}
+
+/** The unit type with the most men in a formation: its artwork stands for the whole army. */
+function leadUnit(units: { unitType: string; count: number }[]): string | null {
+  let best: string | null = null;
+  let n = -1;
+  for (const u of units) if (u.count > n) { n = u.count; best = u.unitType; }
+  return best;
 }
 
 const hex = (c: string) => parseInt(c.replace('#', ''), 16);
@@ -171,11 +226,20 @@ export function WorldMap({
   formations,
   clockOffsetMs,
   previewPath,
+  previewNaval,
+  previewPatrol,
   relationByCountry,
   supplyShort,
   selectedArmyId,
   onArmyClick,
   onOrder,
+  enemies,
+  mines,
+  onEnemyClick,
+  onEnemyOrder,
+  onSeaOrder,
+  previewSea,
+  selectedEnemyId,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const ctxRef = useRef<Ctx | null>(null);
@@ -184,18 +248,40 @@ export function WorldMap({
   const formationsRef = useRef(formations);
   const offsetRef = useRef(clockOffsetMs);
   const previewRef = useRef(previewPath);
+  const previewNavalRef = useRef(previewNaval);
+  const previewPatrolRef = useRef(previewPatrol);
+  previewPatrolRef.current = previewPatrol;
+  const railSig = [...new Set(provinces.filter((p) => p.buildings.some((b) => b.type === 'railway' && b.status === 'complete' && b.damage < 50)).map((p) => p.key))].sort().join(',');
+  const railRef = useRef(railSig);
+  railRef.current = railSig;
   const selectedArmyRef = useRef(selectedArmyId);
   const onArmyClickRef = useRef(onArmyClick);
   const onOrderRef = useRef(onOrder);
   selectedArmyRef.current = selectedArmyId;
   onArmyClickRef.current = onArmyClick;
   onOrderRef.current = onOrder;
+  const enemiesRef = useRef(enemies);
+  const minesRef = useRef(mines);
+  const onEnemyClickRef = useRef(onEnemyClick);
+  const onEnemyOrderRef = useRef(onEnemyOrder);
+  const onSeaOrderRef = useRef(onSeaOrder);
+  const previewSeaRef = useRef(previewSea);
+  const selectedEnemyRef = useRef(selectedEnemyId);
+  enemiesRef.current = enemies;
+  minesRef.current = mines;
+  onEnemyClickRef.current = onEnemyClick;
+  onEnemyOrderRef.current = onEnemyOrder;
+  onSeaOrderRef.current = onSeaOrder;
+  previewSeaRef.current = previewSea;
+  selectedEnemyRef.current = selectedEnemyId;
+  const hoverRef = useRef<string | null>(null);
   const colorsRef = useRef(new Map<string, number>());
   colorsRef.current = new Map(countries.map((c) => [c.id, parseInt(c.color.replace('#', ''), 16)]));
   onSelectRef.current = onSelect;
   formationsRef.current = formations;
   offsetRef.current = clockOffsetMs;
   previewRef.current = previewPath;
+  previewNavalRef.current = previewNaval;
   const [ready, setReady] = useState(false);
 
   // Create the Pixi application once.
@@ -235,6 +321,13 @@ export function WorldMap({
           if (e.target === app.stage && !dragMoved.current) onSelectRef.current(null);
         });
 
+        app.stage.on('rightclick', (e) => {
+          if (e.target !== app.stage) return;
+          const local = world.toLocal(e.global);
+          const node = nearestSeaNode(local.x, local.y, 70);
+          if (node !== null) onSeaOrderRef.current?.(node);
+        });
+
         const shapes = new Map<string, Shape>();
         for (const geo of PROVINCES) {
           const g = new Graphics();
@@ -247,31 +340,96 @@ export function WorldMap({
           world.addChild(g);
           shapes.set(geo.key, { g, label: null as unknown as Text, nameLabel: null as unknown as Text, icons: null });
         }
-        // Roads: land forces travel only along these. Highways run out of capitals; ferries are long sea lanes.
+        // Roads: land forces travel only along these. They run through the border crossing of the two provinces,
+        // never across open water. Highways run out of capitals; ferries follow the sea dots. Kept faint so they
+        // do not fight with the map.
         const roadsG = new Graphics();
         roadsG.eventMode = 'none';
         world.addChild(roadsG);
         for (const kind of ['road', 'highway', 'ferry'] as const) {
           for (const r of ROADS) {
             if (r.kind !== kind) continue;
-            const a = centerOf(r.a);
-            const b = centerOf(r.b);
+            const pts = roadPath(r.a, r.b);
             if (kind === 'ferry') {
-              const len = Math.hypot(b.x - a.x, b.y - a.y);
-              for (let d = 0; d < len; d += 15) {
-                const e = Math.min(len, d + 8);
-                roadsG.moveTo(a.x + ((b.x - a.x) * d) / len, a.y + ((b.y - a.y) * d) / len);
-                roadsG.lineTo(a.x + ((b.x - a.x) * e) / len, a.y + ((b.y - a.y) * e) / len);
+              for (let i = 0; i + 1 < pts.length; i++) {
+                const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
+                const len = Math.hypot(bx - ax, by - ay) || 1;
+                if (len > JUMP) continue;
+                for (let d = 0; d < len; d += 12) {
+                  const e = Math.min(len, d + 5);
+                  roadsG.moveTo(ax + ((bx - ax) * d) / len, ay + ((by - ay) * d) / len);
+                  roadsG.lineTo(ax + ((bx - ax) * e) / len, ay + ((by - ay) * e) / len);
+                }
               }
             } else {
-              roadsG.moveTo(a.x, a.y).lineTo(b.x, b.y);
+              roadsG.moveTo(pts[0][0], pts[0][1]);
+              for (const [x, y] of pts.slice(1)) roadsG.lineTo(x, y);
             }
           }
-          if (kind === 'road') roadsG.stroke({ width: 1.6, color: 0xf1ead2, alpha: 0.55 });
-          else if (kind === 'highway') roadsG.stroke({ width: 2.8, color: 0xffe9a0, alpha: 0.8 });
-          else roadsG.stroke({ width: 1.4, color: 0x9fd0ff, alpha: 0.65 });
+          if (kind === 'road') roadsG.stroke({ width: 0.9, color: 0xf1ead2, alpha: 0.16 });
+          else if (kind === 'highway') roadsG.stroke({ width: 1.3, color: 0xffe9a0, alpha: 0.24 });
+          else roadsG.stroke({ width: 1, color: 0x9fd0ff, alpha: 0.4 });
         }
-        for (const geo of PROVINCES) roadsG.circle(geo.center.x, geo.center.y, 2.6).fill({ color: 0xf1ead2, alpha: 0.8 });
+        for (const geo of PROVINCES) roadsG.circle(geo.center.x, geo.center.y, 1.6).fill({ color: 0xf1ead2, alpha: 0.25 });
+
+        // Railways: drawn over a road once both provinces have a finished railway. Dark bed, sleepers and two rails,
+        // so it can never be mistaken for a plain road.
+        const railG = new Graphics();
+        railG.eventMode = 'none';
+        world.addChild(railG);
+        let railDrawn = '';
+        const drawRails = () => {
+          if (railDrawn === railRef.current) return;
+          railDrawn = railRef.current;
+          railG.clear();
+          const have = new Set(railRef.current ? railRef.current.split(',') : []);
+          const lines: [number, number][][] = [];
+          for (const r of ROADS) {
+            if (r.kind === 'ferry' || !have.has(r.a) || !have.has(r.b)) continue;
+            lines.push(roadPath(r.a, r.b));
+          }
+          // thin dark outline so the track stands out from the land
+          for (const pts of lines) { railG.moveTo(pts[0][0], pts[0][1]); for (const [x, y] of pts.slice(1)) railG.lineTo(x, y); }
+          railG.stroke({ width: 3.6, color: 0x1c1f1c, alpha: 0.45 });
+          // ties across the line, close together like a ladder
+          for (const pts of lines) {
+            for (let i = 0; i + 1 < pts.length; i++) {
+              const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
+              const len = Math.hypot(bx - ax, by - ay) || 1;
+              const nx = -(by - ay) / len, ny = (bx - ax) / len;
+              for (let d = 2; d < len; d += 4) {
+                const cx = ax + ((bx - ax) * d) / len, cy = ay + ((by - ay) * d) / len;
+                railG.moveTo(cx - nx * 3, cy - ny * 3).lineTo(cx + nx * 3, cy + ny * 3);
+              }
+            }
+          }
+          railG.stroke({ width: 1, color: 0x2b2a26, alpha: 0.95 });
+          // two light rails
+          for (const side of [-1.3, 1.3]) {
+            for (const pts of lines) {
+              for (let i = 0; i + 1 < pts.length; i++) {
+                const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
+                const len = Math.hypot(bx - ax, by - ay) || 1;
+                const nx = (-(by - ay) / len) * side, ny = ((bx - ax) / len) * side;
+                railG.moveTo(ax + nx, ay + ny).lineTo(bx + nx, by + ny);
+              }
+            }
+            railG.stroke({ width: 0.8, color: 0xeeeeea, alpha: 1 });
+          }
+        };
+        app.ticker.add(drawRails);
+
+        // Sea dots: the lanes ships sail on. Only shown while a ship is selected or a sea route is being planned.
+        const seaG = new Graphics();
+        seaG.eventMode = 'none';
+        seaG.visible = false;
+        for (const [x, y] of SEA_DOTS) seaG.circle(x, y, 1.9);
+        seaG.fill({ color: 0xcfe8ff, alpha: 0.5 });
+        world.addChild(seaG);
+        app.ticker.add(() => {
+          const sel = formationsRef.current.find((f) => f.id === selectedArmyRef.current);
+          seaG.visible = (!!sel && formationClass(sel.units) === 'naval') || !!previewNavalRef.current;
+        });
 
         // Labels are added after all shapes so neighbours never paint over them.
         for (const geo of PROVINCES) {
@@ -361,26 +519,135 @@ export function WorldMap({
         const armyLayer = new Container();
         armyLayer.eventMode = 'passive';
         world.addChild(armyLayer);
+        const seaFxG = new Graphics();
+        seaFxG.eventMode = 'none';
+        armyLayer.addChild(seaFxG);
+        const enemyTokens = new Map<string, { box: Container; g: Graphics; label: Text }>();
         const routeG = new Graphics();
         armyLayer.addChild(routeG);
         routeG.eventMode = 'none';
-        const tokens = new Map<string, { box: Container; g: Graphics; label: Text; sig: string }>();
+        const tokens = new Map<string, { box: Container; g: Graphics; art: Sprite; label: Text; sig: string }>();
+
+        // A patrol circle: soft fill and a slowly turning dashed ring.
+        const patrolRing = (cx: number, cy: number, r: number, t: number, color: number, strong: boolean) => {
+          routeG.circle(cx, cy, r).fill({ color, alpha: strong ? 0.12 : 0.07 });
+          const n = 40;
+          const spin = t * 0.00025;
+          for (let i = 0; i < n; i++) {
+            const a0 = spin + (i / n) * Math.PI * 2;
+            const a1 = a0 + (Math.PI * 2) / n * 0.55;
+            routeG.moveTo(cx + Math.cos(a0) * r, cy + Math.sin(a0) * r).arc(cx, cy, r, a0, a1);
+          }
+          routeG.stroke({ width: strong ? 2.4 : 1.6, color, alpha: strong ? 0.95 : 0.6 });
+        };
 
         const drawArmies = () => {
           const now = Date.now() + offsetRef.current;
           routeG.clear();
 
+          // Air patrols: every one of your own, and the one being planned.
+          for (const f of formationsRef.current) {
+            if (!f.patrol) continue;
+            const c = PROVINCE_BY_KEY[f.patrol.provinceKey];
+            if (c) patrolRing(c.center.x, c.center.y, f.patrol.radius, now, 0xfff0a8, selectedArmyRef.current === f.id);
+          }
+          const pp = previewPatrolRef.current;
+          if (pp) {
+            const c = PROVINCE_BY_KEY[pp.key];
+            if (c) patrolRing(c.center.x, c.center.y, pp.radius, now, 0xffffff, true);
+          }
+
           const preview = previewRef.current;
           if (preview && preview.length > 0) {
-            const first = centerOf(preview[0]);
-            routeG.moveTo(first.x, first.y);
-            for (const key of preview.slice(1)) {
-              const c = centerOf(key);
-              routeG.lineTo(c.x, c.y);
-            }
+            const line = routePolyline(preview, !!previewNavalRef.current);
+            routeG.moveTo(line[0][0], line[0][1]);
+            for (const [x, y] of line.slice(1)) routeG.lineTo(x, y);
             routeG.stroke({ width: 3, color: 0xffffff, alpha: 0.9 });
-            const last = centerOf(preview[preview.length - 1]);
-            routeG.circle(last.x, last.y, 10).stroke({ width: 2, color: 0xffffff });
+            const last = line[line.length - 1];
+            routeG.circle(last[0], last[1], 10).stroke({ width: 2, color: 0xffffff });
+          }
+
+          // ---- naval extras: range of the selected fleet, mines, enemy fleets, planned sea route
+          seaFxG.clear();
+          const selFleet = formationsRef.current.find((f) => f.id === selectedArmyRef.current);
+          if (selFleet?.sea) {
+            const here = selFleet.sea.voyage
+              ? (() => {
+                  const v = selFleet.sea!.voyage!;
+                  const st = Date.parse(v.startedAt);
+                  const en = Date.parse(v.arrivesAt);
+                  const t = en > st ? Math.min(1, Math.max(0, (now - st) / (en - st))) : 1;
+                  return v.nodes[Math.min(v.nodes.length - 1, Math.floor(t * (v.nodes.length - 1)))];
+                })()
+              : selFleet.sea.node;
+            const maxR = Math.max(0, ...selFleet.units.map((u) => seaRange(u.unitType)));
+            const shortR = fleetRange(selFleet.units);
+            for (const [n, d] of hopsFrom([here], maxR)) {
+              if (n === here) continue;
+              seaFxG.circle(SEA_DOTS[n][0], SEA_DOTS[n][1], d <= shortR ? 3.6 : 3).fill({ color: d <= shortR ? 0xffe27a : 0x9fd0ff, alpha: 0.75 });
+            }
+          }
+          const planned = previewSeaRef.current;
+          if (planned && planned.length > 1) {
+            seaFxG.moveTo(SEA_DOTS[planned[0]][0], SEA_DOTS[planned[0]][1]);
+            for (const n of planned.slice(1)) seaFxG.lineTo(SEA_DOTS[n][0], SEA_DOTS[n][1]);
+            seaFxG.stroke({ width: 3, color: 0xffffff, alpha: 0.9 });
+          }
+          for (const m of minesRef.current ?? []) {
+            const [mx, my] = SEA_DOTS[m.node];
+            const col = m.mine ? 0xffe27a : 0xff6b5b;
+            seaFxG.circle(mx, my, 5).fill({ color: 0x101b27, alpha: 0.9 }).stroke({ width: 1.5, color: col });
+            for (let a = 0; a < 8; a++) {
+              const ang = (a * Math.PI) / 4;
+              seaFxG.moveTo(mx + Math.cos(ang) * 5, my + Math.sin(ang) * 5).lineTo(mx + Math.cos(ang) * 8, my + Math.sin(ang) * 8);
+            }
+            seaFxG.stroke({ width: 1.3, color: col });
+          }
+          const seenEnemy = new Set<string>();
+          const kk = Math.min(1.4, 0.9 / world.scale.x);
+          for (const e of enemiesRef.current ?? []) {
+            let et = enemyTokens.get(e.id);
+            if (!et) {
+              const box = new Container();
+              box.eventMode = 'static';
+              box.cursor = 'crosshair';
+              box.hitArea = new Rectangle(-16, -16, 32, 32);
+              const id = e.id;
+              box.on('pointertap', (ev) => {
+                ev.stopPropagation();
+                if (!dragMoved.current) onEnemyClickRef.current?.(id);
+              });
+              box.on('rightclick', (ev) => {
+                ev.stopPropagation();
+                onEnemyOrderRef.current?.(id);
+              });
+              const g = new Graphics();
+              const label = new Text({ text: '', style: { fontSize: 13, fill: 0xffffff, fontFamily: 'sans-serif', fontWeight: 'bold' } });
+              label.anchor.set(0.5);
+              box.addChild(g);
+              box.addChild(label);
+              armyLayer.addChild(box);
+              et = { box, g, label };
+              enemyTokens.set(e.id, et);
+            }
+            const sel = selectedEnemyRef.current === e.id;
+            et.g.clear();
+            et.g.circle(0, 0, 14).fill({ color: 0xb3261e, alpha: 0.92 }).stroke({ width: sel ? 3.5 : 2, color: sel ? 0xffe27a : 0xffffff });
+            et.label.text = e.submarines && e.ships === 0 ? '?' : String(e.ships);
+            const [ex, ey] = SEA_DOTS[e.node];
+            et.box.position.set(ex, ey);
+            et.box.scale.set(kk);
+            seenEnemy.add(e.id);
+            if (e.toNode !== null) {
+              seaFxG.moveTo(ex, ey).lineTo(SEA_DOTS[e.toNode][0], SEA_DOTS[e.toNode][1]).stroke({ width: 1.5, color: 0xff6b5b, alpha: 0.6 });
+            }
+          }
+          for (const [id, et] of enemyTokens) {
+            if (!seenEnemy.has(id)) {
+              armyLayer.removeChild(et.box);
+              et.box.destroy({ children: true });
+              enemyTokens.delete(id);
+            }
           }
 
           const seen = new Set<string>();
@@ -392,40 +659,94 @@ export function WorldMap({
             const m = f.movement;
             let x: number;
             let y: number;
-            if (m) {
-              const a = centerOf(f.provinceKey);
-              const b = centerOf(m.toKey);
+            if (f.sea) {
+              const v = f.sea.voyage;
+              if (v) {
+                const pts: Point[] = v.nodes.map((n) => SEA_DOTS[n]);
+                if (v.destKey) pts.push([centerOf(v.destKey).x, centerOf(v.destKey).y]);
+                const st = Date.parse(v.startedAt);
+                const en = Date.parse(v.arrivesAt);
+                const t = en > st ? Math.min(1, Math.max(0, (now - st) / (en - st))) : 1;
+                const { at, rest } = splitAt(pts, t);
+                x = at[0];
+                y = at[1];
+                if (rest.length > 1) {
+                  const line = [at, ...rest.slice(1)];
+                  for (let i = 0; i < line.length - 1; i++) {
+                    const [x0, y0] = line[i];
+                    const [x1, y1] = line[i + 1];
+                    const len = Math.hypot(x1 - x0, y1 - y0);
+                    if (len === 0 || len > JUMP) continue;
+                    for (let d = 0; d < len; d += 12 * k) {
+                      const e2 = Math.min(len, d + 7 * k);
+                      routeG.moveTo(x0 + ((x1 - x0) * d) / len, y0 + ((y1 - y0) * d) / len);
+                      routeG.lineTo(x0 + ((x1 - x0) * e2) / len, y0 + ((y1 - y0) * e2) / len);
+                    }
+                  }
+                  routeG.stroke({ width: 2 * k, color: v.attackTargetId ? 0xff6b5b : 0xffe27a, alpha: 0.9 });
+                }
+              } else {
+                x = SEA_DOTS[f.sea.node][0];
+                y = SEA_DOTS[f.sea.node][1];
+              }
+            } else if (m) {
+              const naval = formationClass(f.units) === 'naval';
               const start = Date.parse(m.startedAt);
               const end = Date.parse(m.arrivesAt);
-              const t = end > start ? Math.min(1, Math.max(0, (now - start) / (end - start))) : 1;
-              x = a.x + (b.x - a.x) * t;
-              y = a.y + (b.y - a.y) * t;
+              const held = !!m.holdUntil && Date.parse(m.holdUntil) > now;
+              const t = held ? (m.holdFraction ?? 0) : end > start ? Math.min(1, Math.max(0, (now - start) / (end - start))) : 1;
+              const { at, rest } = splitAt(legPolyline(f.provinceKey, m.toKey, naval), t);
+              x = at[0];
+              y = at[1];
               // Dashed look: the route ahead is drawn as short gold segments with an arrow head at the end.
-              const pts = [{ x, y }, b, ...m.remainingKeys.map(centerOf)];
-              for (let i = 0; i < pts.length - 1; i++) {
-                const p0 = pts[i];
-                const p1 = pts[i + 1];
-                const len = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-                const dash = 7 * k;
-                const gap = 5 * k;
-                for (let d = 0; d < len; d += dash + gap) {
-                  const e = Math.min(len, d + dash);
-                  routeG.moveTo(p0.x + ((p1.x - p0.x) * d) / len, p0.y + ((p1.y - p0.y) * d) / len);
-                  routeG.lineTo(p0.x + ((p1.x - p0.x) * e) / len, p0.y + ((p1.y - p0.y) * e) / len);
-                }
+              const line = [...rest];
+              let from = m.toKey;
+              for (const key of m.remainingKeys) {
+                line.push(...legPolyline(from, key, naval).slice(1));
+                from = key;
               }
-              routeG.stroke({ width: 2 * k, color: 0xffe27a, alpha: 0.9 });
+              const pts = line.map(([px, py]) => ({ x: px, y: py }));
+              const lit = selectedArmyRef.current === f.id || hoverRef.current === f.id;
+              const walk = (draw: (p0: { x: number; y: number }, p1: { x: number; y: number }, len: number) => void) => {
+                for (let i = 0; i < pts.length - 1; i++) {
+                  const len = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+                  if (len === 0 || len > JUMP) continue;
+                  draw(pts[i], pts[i + 1], len);
+                }
+              };
+              // Every army's orders: a thin steel-blue line with an arrow at the end. Hover or select an army and the
+              // line becomes a wider blue track with white dashes marching towards the destination.
+              walk((p0, p1) => routeG.moveTo(p0.x, p0.y).lineTo(p1.x, p1.y));
+              routeG.stroke({ width: (lit ? 3.4 : 1.8) * k, color: 0x2f5a73, alpha: lit ? 1 : 0.85 });
+              if (lit) {
+                const dash = 7 * k;
+                const gap = 6 * k;
+                const shift = ((performance.now() / 45) * k) % (dash + gap);
+                let carried = 0;
+                walk((p0, p1, len) => {
+                  for (let d = -shift + carried; d < len; d += dash + gap) {
+                    const d0 = Math.max(0, d);
+                    const e = Math.min(len, d + dash);
+                    if (e <= d0) continue;
+                    routeG.moveTo(p0.x + ((p1.x - p0.x) * d0) / len, p0.y + ((p1.y - p0.y) * d0) / len);
+                    routeG.lineTo(p0.x + ((p1.x - p0.x) * e) / len, p0.y + ((p1.y - p0.y) * e) / len);
+                  }
+                  carried = (carried + len) % (dash + gap);
+                });
+                routeG.stroke({ width: 1.8 * k, color: 0xffffff, alpha: 0.95 });
+              }
               const last = pts[pts.length - 1];
               const prev = pts[pts.length - 2];
               const ang = Math.atan2(last.y - prev.y, last.x - prev.x);
-              const ah = 8 * k;
+              const ah = (lit ? 11 : 8) * k;
               routeG
                 .poly([
                   last.x, last.y,
-                  last.x - Math.cos(ang - 0.5) * ah, last.y - Math.sin(ang - 0.5) * ah,
-                  last.x - Math.cos(ang + 0.5) * ah, last.y - Math.sin(ang + 0.5) * ah,
+                  last.x - Math.cos(ang - 0.45) * ah, last.y - Math.sin(ang - 0.45) * ah,
+                  last.x - Math.cos(ang + 0.45) * ah, last.y - Math.sin(ang + 0.45) * ah,
                 ])
-                .fill({ color: 0xffe27a });
+                .fill({ color: lit ? 0xffffff : 0x2f5a73 })
+                .stroke({ width: 1.2 * k, color: 0x2f5a73 });
             } else {
               if (sc < 0.7) continue;
               const c = centerOf(f.provinceKey);
@@ -448,7 +769,17 @@ export function WorldMap({
                 e.stopPropagation();
                 if (!dragMoved.current) onArmyClickRef.current?.(id);
               });
+              box.on('pointerover', () => {
+                hoverRef.current = id;
+              });
+              box.on('pointerout', () => {
+                if (hoverRef.current === id) hoverRef.current = null;
+              });
               const g = new Graphics();
+              const art = new Sprite();
+              art.anchor.set(0.5, 1);
+              art.position.set(0, -9);
+              art.visible = false;
               const label = new Text({
                 text: '',
                 style: { fontSize: 12, fill: 0xffffff, fontFamily: 'sans-serif', fontWeight: 'bold' },
@@ -456,15 +787,27 @@ export function WorldMap({
               label.anchor.set(0.5);
               label.position.set(8, 0.5);
               box.addChild(g);
+              box.addChild(art);
               box.addChild(label);
               armyLayer.addChild(box);
-              tk = { box, g, label, sig: '' };
+              tk = { box, g, art, label, sig: '' };
               tokens.set(f.id, tk);
             }
-            const sig = `${cls}|${ownerColor}|${isSelected}`;
+            const lead = leadUnit(f.units);
+            if (lead) requestUnitTexture(lead);
+            const tex = lead ? (unitTextures.get(lead) ?? null) : null;
+            const sig = `${cls}|${ownerColor}|${isSelected}|${tex ? lead : ''}`;
             if (tk.sig !== sig) {
               tk.g.clear();
-              drawToken(tk.g, ownerColor, cls, isSelected);
+              drawToken(tk.g, ownerColor, cls, isSelected, !!tex);
+              if (tex) {
+                tk.art.texture = tex;
+                const fit = Math.min(38 / tex.height, 46 / tex.width);
+                tk.art.scale.set(fit);
+                tk.art.visible = true;
+              } else {
+                tk.art.visible = false;
+              }
               tk.sig = sig;
             }
             tk.box.position.set(x, y);

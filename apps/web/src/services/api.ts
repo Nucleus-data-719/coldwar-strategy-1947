@@ -77,11 +77,41 @@ export const api = {
     formationId: string,
     provinceId: string,
     units?: Partial<Record<UnitType, number>>,
+    waypoint?: boolean,
   ) =>
     post<{ ok: true; formationId: string; etaSeconds: number }>(
       `/campaigns/${campaignId}/formations/${formationId}/move`,
+      { provinceId, units, waypoint },
+    ),
+  delayFormation: (campaignId: string, formationId: string, hours: number) =>
+    post<{ ok: true }>(`/campaigns/${campaignId}/formations/${formationId}/delay`, { hours }),
+  patrolFormation: (
+    campaignId: string,
+    formationId: string,
+    provinceId: string,
+    units?: Partial<Record<UnitType, number>>,
+  ) =>
+    post<{ ok: true; formationId: string; etaSeconds: number }>(
+      `/campaigns/${campaignId}/formations/${formationId}/patrol`,
       { provinceId, units },
     ),
+  sailFormation: (
+    campaignId: string,
+    formationId: string,
+    dest: { provinceId?: string; node?: number },
+    units?: Partial<Record<UnitType, number>>,
+  ) =>
+    post<{ ok: true; formationId: string; etaSeconds: number }>(
+      `/campaigns/${campaignId}/formations/${formationId}/sail`,
+      { ...dest, units },
+    ),
+  navalAttack: (campaignId: string, formationId: string, targetId: string, units?: Partial<Record<UnitType, number>>) =>
+    post<{ ok: true; formationId: string; etaSeconds: number }>(
+      `/campaigns/${campaignId}/formations/${formationId}/naval-attack`,
+      { targetId, units },
+    ),
+  layMines: (campaignId: string, formationId: string) =>
+    post<{ ok: true; strength: number }>(`/campaigns/${campaignId}/formations/${formationId}/lay-mines`),
   stopFormation: (campaignId: string, formationId: string) =>
     post<{ ok: true }>(`/campaigns/${campaignId}/formations/${formationId}/stop`),
 
