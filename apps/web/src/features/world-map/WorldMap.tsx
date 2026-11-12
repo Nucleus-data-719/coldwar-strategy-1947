@@ -137,6 +137,8 @@ interface Shape {
   labelText: string;
   /** Small resource icons (oil, steel, ...). Doubled deposits get a gold ring and x2. */
   icons: Container | null;
+  /** True for the player's own provinces: only those show resource icons and building badges. Foreign ones show just a capital. */
+  detail: boolean;
 }
 
 /** The row of building badges standing on one province. */
@@ -153,6 +155,8 @@ interface Ctx {
   bRows: Map<string, BuildingRow>;
   makeLabel: (geo: ProvinceGeo, shape: Shape) => Text;
   strategic: StrategicView;
+  /** Forces the next frame to re-run the zoom and visibility pass. */
+  invalidate: () => void;
   dispose: () => void;
 }
 
@@ -360,7 +364,7 @@ export function WorldMap({
           });
           g.on('rightclick', () => onOrderRef.current?.(geo.key));
           world.addChild(g);
-          shapes.set(geo.key, { g, label: null, nameLabel: null, icons: null, sig: '', labelText: '' });
+          shapes.set(geo.key, { g, label: null, nameLabel: null, icons: null, sig: '', labelText: '', detail: false });
         }
         // Zoomed-out view: whole countries, borders and names. Shown instead of the provinces below STRATEGIC_BELOW.
         const strategic = createStrategicView({
@@ -369,19 +373,12 @@ export function WorldMap({
         });
         world.addChildAt(strategic.container, 0);
 
-        // Depth: the land stands on a slab. A pale shallow-water halo around the coasts and a dark offset copy of the
-        // land underneath give the flat map a raised, 3D look. Static: drawn once, never redrawn.
-        const halo = new Graphics();
-        halo.eventMode = 'none';
-        for (const geo of PROVINCES) halo.poly(geo.polygon);
-        halo.stroke({ width: 16, color: 0x2a5f84, alpha: 0.16, join: 'round' });
+        // Depth: a dark copy of the land, offset down and right, sits under it so the land looks raised. Drawn once.
         const slab = new Graphics();
         slab.eventMode = 'none';
-        for (const geo of PROVINCES) slab.poly(geo.polygon);
-        slab.fill({ color: 0x02070c, alpha: 0.55 });
+        for (const geo of PROVINCES) slab.poly(geo.polygon).fill({ color: 0x02070c, alpha: 0.5 });
         slab.position.set(4, 6);
         world.addChildAt(slab, 0);
-        world.addChildAt(halo, 0);
 
         // Roads: land forces travel only along these. They run through the border crossing of the two provinces,
         // never across open water. Highways run out of capitals; ferries follow the sea dots. Kept faint so they
@@ -415,30 +412,27 @@ export function WorldMap({
         }
         for (const geo of PROVINCES) roadsG.circle(geo.center.x, geo.center.y, 1).fill({ color: 0xf1ead2, alpha: 0.25 });
 
-        // Railways: a thin black track with fine ties, drawn only inside the province that has the railway: from its
+        // Railways: a grey track (bed, ties and two rails), drawn only inside the province that has the railway: from its
         // centre to the border crossing. A road between two railway provinces gets the whole line.
         const railG = new Graphics();
         railG.eventMode = 'none';
         world.addChild(railG);
         let railDrawn = '';
-        // the part of a road path from one end up to its half-way point (by length), where it crosses the border
-        const halfPath = (pts: [number, number][], fromStart: boolean): [number, number][] => {
-          const ordered = fromStart ? pts : [...pts].reverse();
-          let total = 0;
-          for (let i = 1; i < ordered.length; i++) total += Math.hypot(ordered[i][0] - ordered[i - 1][0], ordered[i][1] - ordered[i - 1][1]);
-          const out: [number, number][] = [ordered[0]];
-          let run = 0;
-          for (let i = 1; i < ordered.length; i++) {
-            const seg = Math.hypot(ordered[i][0] - ordered[i - 1][0], ordered[i][1] - ordered[i - 1][1]);
-            if (run + seg >= total / 2) {
-              const t = seg === 0 ? 0 : (total / 2 - run) / seg;
-              out.push([ordered[i - 1][0] + (ordered[i][0] - ordered[i - 1][0]) * t, ordered[i - 1][1] + (ordered[i][1] - ordered[i - 1][1]) * t]);
-              return out;
-            }
-            out.push(ordered[i]);
-            run += seg;
+        // the part of a road that lies inside one province: from that province's centre to the border crossing. The road
+        // data puts one crossing point on the shared border, so the track stops exactly on the boundary.
+        const insidePath = (pts: [number, number][], fromStart: boolean): [number, number][] => {
+          const m = pts.length;
+          if (m === 2) {
+            const mid: [number, number] = [(pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2];
+            return fromStart ? [pts[0], mid] : [pts[1], mid];
           }
-          return out;
+          if (m % 2 === 1) {
+            const k = (m - 1) / 2;
+            return fromStart ? pts.slice(0, k + 1) : pts.slice(k).reverse();
+          }
+          const h = m / 2;
+          const mid: [number, number] = [(pts[h - 1][0] + pts[h][0]) / 2, (pts[h - 1][1] + pts[h][1]) / 2];
+          return fromStart ? [...pts.slice(0, h), mid] : [mid, ...pts.slice(h)].reverse();
         };
         const drawRails = () => {
           if (railDrawn === railRef.current) return;
@@ -452,23 +446,34 @@ export function WorldMap({
             if (!hasA && !hasB) continue;
             const full = roadPath(r.a, r.b);
             if (hasA && hasB) lines.push(full);
-            else lines.push(halfPath(full, hasA));
+            else lines.push(insidePath(full, hasA));
           }
+          // grey track: a soft bed, ties across it, and two light rails; about half the size of the first version
           for (const pts of lines) { railG.moveTo(pts[0][0], pts[0][1]); for (const [x, y] of pts.slice(1)) railG.lineTo(x, y); }
-          railG.stroke({ width: 0.55, color: 0x0d0d0d, alpha: 0.95 });
-          // fine ties across the track
+          railG.stroke({ width: 2.1, color: 0x3f4246, alpha: 0.55 });
           for (const pts of lines) {
             for (let i = 0; i + 1 < pts.length; i++) {
               const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
               const len = Math.hypot(bx - ax, by - ay) || 1;
               const nx = -(by - ay) / len, ny = (bx - ax) / len;
-              for (let d = 1.5; d < len; d += 2.6) {
+              for (let d = 1.5; d < len; d += 3) {
                 const cx = ax + ((bx - ax) * d) / len, cy = ay + ((by - ay) * d) / len;
-                railG.moveTo(cx - nx * 1.1, cy - ny * 1.1).lineTo(cx + nx * 1.1, cy + ny * 1.1);
+                railG.moveTo(cx - nx * 1.6, cy - ny * 1.6).lineTo(cx + nx * 1.6, cy + ny * 1.6);
               }
             }
           }
-          railG.stroke({ width: 0.3, color: 0x0d0d0d, alpha: 0.9 });
+          railG.stroke({ width: 0.45, color: 0x7b7f84, alpha: 0.9 });
+          for (const side of [-0.7, 0.7]) {
+            for (const pts of lines) {
+              for (let i = 0; i + 1 < pts.length; i++) {
+                const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
+                const len = Math.hypot(bx - ax, by - ay) || 1;
+                const nx = (-(by - ay) / len) * side, ny = ((bx - ax) / len) * side;
+                railG.moveTo(ax + nx, ay + ny).lineTo(bx + nx, by + ny);
+              }
+            }
+            railG.stroke({ width: 0.4, color: 0xb4b8bc, alpha: 1 });
+          }
         };
         app.ticker.add(drawRails);
 
@@ -617,6 +622,16 @@ export function WorldMap({
 
         // Keep labels a readable size at every zoom, and only show detail when zoomed in, and only for what is on screen.
         let lastScale = -1, viewX = NaN, viewY = NaN, stratOn = false;
+        // Province bounding boxes, so shapes off screen are not drawn at all (the GPU would otherwise paint all 2,300).
+        const bounds = new Map<string, [number, number, number, number]>();
+        for (const geo of PROVINCES) {
+          let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+          for (let i = 0; i < geo.polygon.length; i += 2) {
+            const x = geo.polygon[i], y = geo.polygon[i + 1];
+            if (x < a) a = x; if (x > c) c = x; if (y < b) b = y; if (y > d) d = y;
+          }
+          bounds.set(geo.key, [a, b, c, d]);
+        }
         const syncLabels = () => {
           const sc = world.scale.x;
           const px = world.position.x, py = world.position.y;
@@ -628,7 +643,7 @@ export function WorldMap({
             stratOn = strat;
             strategic.container.visible = strat;
             for (const s of shapes.values()) {
-              s.g.visible = !strat;
+              if (strat) s.g.visible = false;
               if (strat) {
                 if (s.icons) s.icons.visible = false;
                 if (s.label) s.label.visible = false;
@@ -646,20 +661,22 @@ export function WorldMap({
             const shape = shapes.get(geo.key)!;
             const cx = geo.center.x, cy = geo.center.y;
             const inView = cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1;
+            const bb = bounds.get(geo.key)!;
+            shape.g.visible = bb[2] >= x0 && bb[0] <= x1 && bb[3] >= y0 && bb[1] <= y1;
             const icons = shape.icons;
             if (icons) {
-              icons.visible = sc >= 0.9 && inView;
+              icons.visible = shape.detail && sc >= 0.9 && inView;
               if (icons.visible) { icons.scale.set(0.9 / sc); icons.position.set(cx, cy - 15 / sc); }
             }
             const row = bRows.get(geo.key)!;
-            row.box.visible = sc >= 0.9 && inView && row.items.length > 0;
+            row.box.visible = shape.detail && sc >= 0.9 && inView && row.items.length > 0;
             if (row.box.visible) { row.box.scale.set(0.9 / sc); row.box.position.set(cx, cy - 38 / sc); }
             if (shape.label) {
               shape.label.visible = sc >= 0.7 && inView;
               shape.label.scale.set(0.9 / sc);
             }
             // Only cities carry a name on the map; plains, hills and the rest are named in their panel.
-            if (sc >= 1.5 && inView && (geo.isCity || geo.isCapital)) {
+            if (sc >= 1.5 && inView && (geo.isCapital || (shape.detail && geo.isCity))) {
               const nl = shape.nameLabel ?? makeName(geo, shape);
               nl.visible = true;
               nl.scale.set(0.85 / sc);
@@ -1063,6 +1080,7 @@ export function WorldMap({
           bRows,
           makeLabel,
           strategic,
+          invalidate: () => { lastScale = -1; },
           dispose: () => {
             resizeObserver.disconnect();
             app.ticker.remove(drawArmies);
@@ -1108,6 +1126,9 @@ export function WorldMap({
       const st = stateByKey.get(geo.key);
       if (!shape || !st) continue;
       const mine = st.ownerCountryId === myCountryId;
+      const wasDetail = shape.detail;
+      shape.detail = mine || mode === 'resources';
+      if (wasDetail !== shape.detail) ctx.invalidate();
       const selected = selectedKey === geo.key;
       const enemy = atWarSet.has(st.ownerCountryId);
 
@@ -1187,13 +1208,14 @@ export function WorldMap({
             row.items.push({ overlay, spec, startedAt, completesAt });
           });
           if (n > 0) row.box.hitArea = new Rectangle(-total / 2, -BADGE / 2, total, BADGE);
-          row.box.visible = sc >= 0.9 && n > 0;
+          row.box.visible = shape.detail && sc >= 0.9 && n > 0;
           row.box.scale.set(0.9 / sc);
           row.box.position.set(geo.center.x, geo.center.y - 38 / sc);
         }
       }
 
-      if (mode !== 'resources') drawTerrainMarks(shape.g, geo.polygon, geo.terrain, geo.key.length * 7919 + geo.key.charCodeAt(0));
+      // Mountains, trees and dunes belong to the terrain map only; on the political map they just add noise.
+      if (mode === 'terrain') drawTerrainMarks(shape.g, geo.polygon, geo.terrain, geo.key.length * 7919 + geo.key.charCodeAt(0));
       }
 
       const parts: string[] = [];

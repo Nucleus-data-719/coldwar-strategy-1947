@@ -55,7 +55,7 @@ describe('movement', () => {
   });
 
   it('game speed shortens travel', () => {
-    expect(legSeconds('washington', 'detroit', 1, false, 60)).toBeLessThan(legSeconds('washington', 'detroit', 1, false, 1) / 50);
+    expect(legSeconds('washington', 'chicago', 1, false, 60)).toBeLessThan(legSeconds('washington', 'chicago', 1, false, 1) / 50);
   });
 
   it('applies several finished legs after being offline, without drifting', () => {

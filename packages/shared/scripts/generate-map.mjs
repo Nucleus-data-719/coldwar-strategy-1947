@@ -7,7 +7,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AI_CAPITAL_RESOURCE, AI_CITIES, CAPITAL_FIX, MERGE, PLAYABLE, RENAME, KEEP_CITIES, cityTarget } from './map-source.mjs';
+import { AI_CAPITAL_RESOURCE, AI_CITIES, AI_BORDER_TOWNS, CAPITAL_FIX, MERGE, PLAYABLE, RENAME, KEEP_CITIES, BORDER_CITIES, MUST_CITIES, cityTarget } from './map-source.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const T0 = Date.now();
@@ -177,23 +177,101 @@ for (let k = 0; k < countries.length; k++) {
 lap(`${compCount} country landmasses`);
 
 // ---------- fixed seeds: capitals, cities, deposits ----------
-// Keeps the first cities of a country's list up to its target, but prefers a city that supplies a resource the
-// country would otherwise lack (capital and the two deposits count as supplied).
-function pickCities(sp) {
-  const keep = KEEP_CITIES[sp.code];
-  if (keep) return keep.map((n) => sp.cities.find((c) => c[0] === n) ?? (console.error(`KEEP_CITIES: ${sp.code} has no city ${n}`), process.exit(1)));
-  const slots = cityTarget(sp) - 1; // the capital is one of the cities
+// Chooses a playable country's cities (the capital is one of them). The rule, in order of weight:
+//  1. every land neighbour with a real frontier should have a city within about 1.6 provinces of that frontier, so a
+//     country can answer an attack from any side (weighted by how long the frontier is);
+//  2. cities are spread out: none closer than about 1.2 provinces to another;
+//  3. famous cities (KEEP_CITIES) and cities that supply a resource the country lacks are preferred a little.
+// Candidates are the country's own list plus its BORDER_CITIES in map-source.mjs.
+const ownCell = (k, lon, lat) => {
+  const i0 = Math.floor((lon - LON0) / CELL), j0 = Math.floor((LAT1 - lat) / CELL);
+  for (let r = 0; r <= 14; r++) {
+    let best = null, bd = Infinity;
+    for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+      if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+      const i = i0 + di, j = j0 + dj;
+      if (i < 0 || j < 0 || i >= W || j >= H || cty[j * W + i] !== k + 1) continue;
+      const d = di * di + dj * dj; if (d < bd) { bd = d; best = [i, j]; }
+    }
+    if (best) return best;
+  }
+  return null;
+};
+const cityReport = [];
+function pickCities(sp, k) {
+  const slots = cityTarget(sp) - 1;
+  const keep = new Set(KEEP_CITIES[sp.code] ?? []);
+  const pool = [...sp.cities, ...(BORDER_CITIES[sp.code] ?? [])];
+  const rankOf = new Map(pool.map((c, n) => [c[0], n < sp.cities.length ? n : 99]));
+  const fixed = false; // KEEP_CITIES are a strong preference now, not a fixed list: a pick too close to another city is skipped
+  // frontier cells with every neighbour, grouped into stretches (a stretch ends where the border breaks by 4 degrees or more)
+  const fcells = new Map(); let total = 0;
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    if (cty[j * W + i] !== k + 1) continue;
+    total++;
+    for (const [di, dj] of N4) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= W || b >= H) continue; const o = cty[b * W + a]; if (o && o !== k + 1) { if (!fcells.has(o)) fcells.set(o, []); fcells.get(o).push([i, j]); } }
+  }
+  const spacing = Math.sqrt(total / sp.n) * CELL; // degrees between neighbouring provinces
+  const R = Math.min(1.6 * spacing, 4.5) / CELL; // cells: how close a city must be to a frontier to defend it
+  const GAP = 16;
+  const stretches = [];
+  for (const [o, cells] of fcells) {
+    const par = cells.map((_, i) => i);
+    const find = (x) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+    const hash = new Map();
+    cells.forEach(([i, j], idx) => { const key = `${Math.floor(i / GAP)},${Math.floor(j / GAP)}`; if (!hash.has(key)) hash.set(key, []); hash.get(key).push(idx); });
+    cells.forEach(([i, j], idx) => {
+      for (let gi = -1; gi <= 1; gi++) for (let gj = -1; gj <= 1; gj++) for (const o2 of hash.get(`${Math.floor(i / GAP) + gi},${Math.floor(j / GAP) + gj}`) ?? []) {
+        if (o2 !== idx && Math.hypot(cells[o2][0] - i, cells[o2][1] - j) <= GAP) par[find(idx)] = find(o2);
+      }
+    });
+    const groups = new Map(); cells.forEach((c, idx) => { const r = find(idx); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(c); });
+    for (const g of groups.values()) {
+      if (g.length < 8) continue;
+      const step = Math.max(1, Math.floor(g.length / 40));
+      const sample = g.filter((_, i) => i % step === 0);
+      const cx = g.reduce((t, c) => t + c[0], 0) / g.length, cy = g.reduce((t, c) => t + c[1], 0) / g.length;
+      stretches.push({ o, name: countries[o - 1].name, w: Math.min(3, Math.sqrt(g.length) / 4), sample, lon: lonOf(cx), lat: latOf(cy) });
+    }
+  }
+  const place = (c) => { const cell = ownCell(k, c[1], c[2]); return cell && { c, i: cell[0], j: cell[1] }; };
+  const cap = place(sp.capital);
+  const cands = pool.map(place).filter(Boolean);
+  // which stretches does a cell defend?
+  const reach = (i, j) => {
+    const hit = new Set();
+    stretches.forEach((st, n) => { for (const [a, b] of st.sample) if (Math.hypot(a - i, b - j) <= R) { hit.add(n); break; } });
+    return hit;
+  };
+  for (const cd of cands) cd.reach = reach(cd.i, cd.j);
+  const capReach = cap ? reach(cap.i, cap.j) : new Set();
+  const covered = new Set(capReach);
+  const chosen = cap ? [cap] : [];
   const have = new Set([sp.capital[3], ...sp.deposits.map((d) => d[3])]);
   const all = ['o', 's', 'e', 'r', 'w', 'f'];
-  const picked = [], skipped = [];
-  for (const c of sp.cities) {
-    if (picked.length >= slots) break;
-    const uncovered = all.filter((r) => !have.has(r));
-    const spare = slots - picked.length;
-    if (uncovered.includes(c[3]) || uncovered.length < spare) { picked.push(c); have.add(c[3]); } else skipped.push(c);
+  const picked = [];
+  if (fixed) for (const n of fixed) { const cd = cands.find((q) => q.c[0] === n); if (!cd) { console.error(`KEEP_CITIES: ${sp.code} has no city ${n}`); process.exit(1); } picked.push(cd); chosen.push(cd); for (const o of cd.reach) covered.add(o); }
+  for (const n of MUST_CITIES[sp.code] ?? []) { const cd = cands.find((q) => q.c[0] === n); if (cd && !picked.includes(cd) && picked.length < slots) { picked.push(cd); chosen.push(cd); have.add(cd.c[3]); for (const o of cd.reach) covered.add(o); } }
+  const dist = (a, b) => Math.hypot(a.i - b.i, a.j - b.j) * CELL;
+  let relax = 1; // when the candidates run out, the minimum distance between cities is loosened step by step
+  while (picked.length < slots) {
+    let best = null, bs = -Infinity;
+    for (const cd of cands) {
+      if (picked.includes(cd) || chosen.includes(cd)) continue;
+      const mind = chosen.length ? Math.min(...chosen.map((q) => dist(cd, q))) : spacing * 3;
+      let gain = 0; stretches.forEach((st, n) => { if (!covered.has(n) && cd.reach.has(n)) gain += st.w; });
+      let sc = gain + 0.45 * Math.min(3, mind / spacing) + (keep.has(cd.c[0]) ? ((sp.tier === 'super' || sp.tier === 'major') ? 3 : 0.5) : 0) + Math.max(0, 1 - (rankOf.get(cd.c[0]) ?? 99) / 8) + (!have.has(cd.c[3]) && all.includes(cd.c[3]) ? 0.25 : 0);
+      const minD = relax * (keep.has(cd.c[0]) ? 2.2 : Math.min(Math.max(1.5 * spacing, 2.5), 3.4));
+      if (mind < minD && !(MUST_CITIES[sp.code] ?? []).includes(cd.c[0])) continue; // too close: it would touch another city
+      if (sc > bs) { bs = sc; best = cd; }
+    }
+    if (!best) { if (relax > 0.4) { relax -= 0.15; continue; } break; }
+    picked.push(best); chosen.push(best); have.add(best.c[3]);
+    for (const o of best.reach) covered.add(o);
   }
-  for (const c of skipped) { if (picked.length >= slots) break; picked.push(c); }
-  return picked;
+  const open = stretches.map((st, n) => ({ st, n })).filter((x) => !covered.has(x.n)).sort((a, b) => b.st.w - a.st.w);
+  cityReport.push(`${sp.code} (${stretches.length} stretches, R=${(R * CELL).toFixed(1)}°): ${open.map((x) => `${x.st.name}@${x.st.lon.toFixed(0)},${x.st.lat.toFixed(0)}`).join(' ') || 'all covered'}`);
+  return picked.map((q) => q.c);
 }
 const fixedOf = countries.map(() => []); // {name, lon, lat, res, doubled, city, capital}
 const warn = [];
@@ -202,7 +280,7 @@ for (let k = 0; k < countries.length; k++) {
   if (ct.spec) {
     const sp = ct.spec;
     fixedOf[k].push({ name: sp.capital[0], lon: sp.capital[1], lat: sp.capital[2], res: sp.capital[3], city: true, capital: true });
-    for (const c of pickCities(sp)) fixedOf[k].push({ name: c[0], lon: c[1], lat: c[2], res: c[3], city: true });
+    for (const c of pickCities(sp, k)) fixedOf[k].push({ name: c[0], lon: c[1], lat: c[2], res: c[3], city: true });
     for (const d of sp.deposits) fixedOf[k].push({ name: d[0], lon: d[1], lat: d[2], res: d[3], doubled: true, city: false });
   } else {
     const first = ct.cs[0];
@@ -212,11 +290,25 @@ for (let k = 0; k < countries.length; k++) {
     fixedOf[k].push({ name: capName, lon, lat, res: AI_CAPITAL_RESOURCE[ct.baseName] ?? AI_CAPITAL_RESOURCE[ct.name] ?? 'f', city: true, capital: true });
   }
 }
+// AI countries with a border-town list lose their coastal cities (the capital stays) and get real towns on the frontier instead.
+const nearSea = (lon, lat, r = 3) => {
+  const ci = Math.round((lon - LON0) / CELL), cj = Math.round((LAT1 - lat) / CELL);
+  for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { const a = ci + di, b = cj + dj; if (a >= 0 && b >= 0 && a < W && b < H && ocean[b * W + a] === 1) return true; }
+  return false;
+};
+const hasBorderTowns = new Set(AI_BORDER_TOWNS.map((t) => t[0]));
 for (const [cname, name, lon, lat, res] of AI_CITIES) {
   const code = csToCode.get(cname);
   if (!code) { warn.push(`AI city for unknown country ${cname}`); continue; }
+  if (hasBorderTowns.has(cname) && nearSea(lon, lat)) { console.log(`  dropped coastal ${name} (${cname})`); continue; }
   fixedOf[cidx.get(code) - 1].push({ name, lon, lat, res, city: true });
 }
+for (const [cname, name, lon, lat, res] of AI_BORDER_TOWNS) {
+  const code = csToCode.get(cname);
+  if (!code) { warn.push(`AI border town for unknown country ${cname}`); continue; }
+  fixedOf[cidx.get(code) - 1].push({ name, lon, lat, res, city: true });
+}
+for (const r of cityReport) console.log('  frontier ' + r);
 // snap each fixed seed to the nearest cell of its country
 for (let k = 0; k < countries.length; k++) {
   const keep = [];
@@ -443,7 +535,7 @@ for (let k = 0; k < countries.length; k++) {
   }
   // fill resource gaps for playable countries and make sure everyone has at least a little food
   if (ct.playable) {
-    const cities = ct.provIdx.map((i) => provs[i]).filter((p) => p.city && !p.capital);
+    const cities = ct.provIdx.map((i) => provs[i]).filter((p) => p.city && !p.capital && !(MUST_CITIES[ct.code] ?? []).includes(p.name));
     const have = () => { const h = new Set(); for (const i of ct.provIdx) if (provs[i].res) h.add(provs[i].res); return h; };
     for (const need of ['o', 's', 'e', 'r', 'w']) {
       if (have().has(need)) continue;

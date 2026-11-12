@@ -352,3 +352,23 @@ No database change. **Garrison changes apply to new campaigns only**, so create 
 - **Zoomed-out view (Hearts of Iron IV style):** below zoom 0.9 the map shows whole countries in one colour with thin borders and a large name laid along each country (`strategic-view.ts`). Provinces, roads, railways, icons and building badges are not drawn at all in that view, which is what makes the world view fast. Zoom in to see provinces. Clicking a country selects its capital. Orders to a province need the province view.
 - **Depth look:** a pale shallow-water halo around the coasts, a dark slab under the land and a soft vignette. This is a 2.5D look, not a tilted camera.
 - **Not done:** a real tilted 3D camera (perspective, terrain textures). It needs a different renderer and a rewrite of clicking and army drawing, so it is a separate piece of work.
+
+**Fix after first test of round 2:** the zoomed-out view had holes (some provinces were not filled, because Pixi dropped some polygons when many touching ones shared one fill; each province is now filled on its own), and zooming in was slow (a wide coast halo made of 2,300 stroked outlines was drawn every frame, and every province shape was drawn even when off screen). The halo is gone, and province shapes outside the window are now hidden.
+
+## Map fixes, round 3
+
+**Restart the server and use the new default campaign** (the city layout changed again, so older campaigns are hidden automatically).
+
+- **Political map has no terrain symbols** (mountains, trees, dunes). They are drawn only in the Terrain map mode.
+- **Railways** now stop exactly on the province boundary: a railway in one province is drawn from its centre to the border crossing of each road, no further and no shorter. A road between two railway provinces is drawn in full.
+- **Cities are placed by frontier, not by list.** For every playable country the generator finds each stretch of land border with a neighbour and picks cities so that every stretch has a city near it, while keeping cities apart from each other (`pickCities` in `generate-map.mjs`). Hand-written preferences are in `map-source.mjs`: `KEEP_CITIES` (strong preference for the 15 super and major countries), `MUST_CITIES` (never dropped: Ploiesti, Dhahran, Basra, Abadan, Karabuk, Quetta, Gilgit, Lahore) and `BORDER_CITIES` (extra frontier towns such as Quetta, Gilgit, Jodhpur, Srinagar, Kashgar, Urumqi, Boa Vista, Campo Grande, Whitehorse). Run the generator to see which frontiers are left uncovered ("frontier ..." lines).
+- **Countries without a player** with a long border and no city near it get a fort town there, such as Fort Chad, Fort Algeria and Fort Egypt for Libya. They hold the 5-infantry garrison like any city.
+- Counts stay 7 for super and major countries, 6 for medium, 3 to 5 for small. Pakistan now has Karachi, Quetta, Dalbandin, Lahore, Gilgit and Chittagong; India has Srinagar and Jodhpur on the Pakistani side and Imphal in the east; China has Urumqi and Kashgar in the west.
+- Some famous cities are gone because they sit next to a capital or another city (New York, Sydney, Sao Paulo, Leningrad, Toronto). To bring one back, put it in `MUST_CITIES` and re-run.
+
+## Map fixes, round 4
+
+- **Railways** are drawn as grey double-rail track with ties, thinner and lighter than before (still only inside their own province).
+- **Libya, Algeria and other AI countries**: coastal cities are removed (capitals stay) and real towns on the land borders are added instead (Ghadames, Ghat, Kufra, Jaghbub, Tindouf, Tamanrasset, Bechar, Tebessa, ...). The generated "Fort ..." outposts are gone. Edit `AI_BORDER_TOWNS` in `packages/shared/scripts/map-source.mjs`.
+- **Less clutter**: resource icons, building badges and city names show only on your own provinces. Foreign countries show just their capital. The Resources map mode still shows everyone's icons.
+- Province keys changed: restart the server and use the new default campaign.

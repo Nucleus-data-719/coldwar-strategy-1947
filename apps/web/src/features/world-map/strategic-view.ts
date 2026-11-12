@@ -118,9 +118,9 @@ export function createStrategicView(opts: { isDragging: () => boolean; onSelect:
       const c = info.get(ownerId);
       if (!c) continue;
       // fill: all of the country's provinces in one shape; a same-colour hairline hides the seams between them
+      // each province is filled on its own: one fill over many touching polygons drops some of them
       const g = new Graphics();
-      for (const i of members) g.poly(PROVINCES[i].polygon);
-      g.fill({ color: c.color, alpha: 0.92 }).stroke({ width: 0.8, color: c.color, alpha: 0.92 });
+      for (const i of members) g.poly(PROVINCES[i].polygon).fill({ color: c.color, alpha: 1 }).stroke({ width: 0.8, color: c.color, alpha: 1 });
       g.eventMode = 'static';
       g.cursor = 'pointer';
       const clickKey = c.clickKey ?? PROVINCES[members[0]].key;

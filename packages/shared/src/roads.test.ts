@@ -73,7 +73,7 @@ describe('roads', () => {
   it('land routes use only roads, and highways are quicker than roads', () => {
     const owner = new Map(PROVINCES.map((p) => [p.key, 'me']));
     const ctx = { countryId: 'me', ownerByKey: owner, atWarWith: new Set<string>(), railwayKeys: new Set<string>(), speed: 1, gameSpeed: 1, useRoads: true };
-    const route = planRoute('moscow', 'novosibirsk', ctx)!;
+    const route = planRoute('moscow', 'irkutsk', ctx)!;
     expect(route).not.toBeNull();
     for (let i = 0; i < route.path.length - 1; i++) expect(roadBetween(route.path[i], route.path[i + 1])).toBeDefined();
     // Same distance on a highway takes less time than on a road: compare equal-terrain legs by ratio.
@@ -86,15 +86,15 @@ describe('roads', () => {
 
   it('ships sail along the sea dots from port to port', () => {
     expect(SEA_DOTS.length).toBeGreaterThan(500);
-    const route = seaRoute('new_york', 'liverpool')!;
+    const route = seaRoute('houston', 'southampton')!;
     expect(route).not.toBeNull();
     expect(route.points.length).toBeGreaterThan(4);
     const owner = new Map(PROVINCES.map((p) => [p.key, 'me']));
     const ctx = { countryId: 'me', ownerByKey: owner, atWarWith: new Set<string>(), railwayKeys: new Set<string>(), speed: 1, gameSpeed: 1, coastalOnly: true };
-    const plan = planRoute('new_york', 'liverpool', ctx)!;
-    expect(plan.path).toEqual(['new_york', 'liverpool']);
+    const plan = planRoute('houston', 'southampton', ctx)!;
+    expect(plan.path).toEqual(['houston', 'southampton']);
     expect(plan.totalSeconds).toBeGreaterThan(3600);
     expect(hasPort('chicago')).toBe(false);
-    expect(planRoute('new_york', 'chicago', ctx)).toBeNull();
+    expect(planRoute('houston', 'chicago', ctx)).toBeNull();
   });
 });

@@ -89,6 +89,15 @@ export const AI_CITIES = [
   ['Oman', 'Fahud', 56.5, 22.3, 'o'], ['Yemen (Arab Republic of Yemen)', 'Hodeidah', 42.95, 14.8, 'f'],
 ];
 
+/** Real towns on the frontiers of AI countries: [country (CShapes name), town, lon, lat, resource]. Countries listed here lose their coastal cities. */
+export const AI_BORDER_TOWNS = [
+  ['Libya', 'Ghadames', 9.5, 30.13, 'f'], ['Libya', 'Ghat', 10.17, 24.96, 'o'], ['Libya', 'Kufra', 23.3, 24.2, 'f'], ['Libya', 'Jaghbub', 24.5, 29.75, 'o'],
+  ['Algeria', 'Tindouf', -8.15, 27.67, 'r'], ['Algeria', 'Tamanrasset', 5.52, 22.79, 'f'], ['Algeria', 'Bechar', -2.22, 31.62, 'f'], ['Algeria', 'Tebessa', 8.12, 35.4, 's'],
+  ['Sudan', 'Wadi Halfa', 31.35, 21.8, 'f'], ['Sudan', 'El Fasher', 25.35, 13.63, 'f'], ['Sudan', 'Kassala', 36.4, 15.45, 'o'],
+  ['Nigeria', 'Maiduguri', 13.15, 11.85, 'o'], ['Nigeria', 'Sokoto', 5.24, 13.06, 'f'],
+  ['Morocco', 'Oujda', -1.91, 34.68, 'f'], ['Kenya', 'Moyale', 39.05, 3.52, 'f'], ['Mozambique', 'Tete', 33.58, -16.16, 'f'], ['Ecuador', 'Loja', -79.2, -4.0, 'f'],
+];
+
 // Playable countries: [name in CShapes (for the capital), code, display name, colour, provinces, capital, blurb, startBonus, cities, deposits]
 // cities: [name, lon, lat, resource]; deposits: [name, lon, lat, resource]
 const c = (name, lon, lat, r) => [name, lon, lat, r];
@@ -98,7 +107,7 @@ export const PLAYABLE = [
     bonus: { money: 3000, steel: 800, electronics: 60, wood: 400 },
     capital: c('Washington', -77.04, 38.9, 'e'),
     cities: [c('New York', -74.0, 40.71, 'e'), c('Boston', -71.06, 42.36, 'e'), c('Philadelphia', -75.16, 39.95, 's'), c('Pittsburgh', -80.0, 40.44, 's'), c('Detroit', -83.05, 42.33, 's'),
-      c('Chicago', -87.63, 41.88, 'f'), c('St. Louis', -90.2, 38.63, 'f'), c('Houston', -95.37, 29.76, 'o'), c('Dallas', -96.8, 32.78, 'o'), c('Atlanta', -84.39, 33.75, 'f'), c('New Orleans', -90.07, 29.95, 'f'),
+      c('Chicago', -87.63, 41.88, 'e'), c('St. Louis', -90.2, 38.63, 'f'), c('Houston', -95.37, 29.76, 'f'), c('Dallas', -96.8, 32.78, 'o'), c('Atlanta', -84.39, 33.75, 'f'), c('New Orleans', -90.07, 29.95, 'f'),
       c('Denver', -104.99, 39.74, 'r'), c('Los Angeles', -118.24, 34.05, 'e'), c('San Francisco', -122.42, 37.77, 'f'), c('Seattle', -122.33, 47.6, 'e'), c('Portland', -122.68, 45.52, 'w'),
       c('Minneapolis', -93.27, 44.98, 'f'), c('Honolulu', -157.86, 21.31, 'f'), c('Anchorage', -149.9, 61.22, 'w')],
     deposits: [c('Mesabi Iron Range', -92.7, 47.5, 's'), c('Permian Basin', -102.0, 31.8, 'o')] },
@@ -265,7 +274,7 @@ export const PLAYABLE = [
   { code: 'PAK', name: 'Pakistan', color: '#4f8f5f', tier: 'medium', n: 45, blurb: 'Born in blood, in two halves: Punjab and Bengal.',
     bonus: { manpower: 6000, food: 1000 },
     capital: c('Karachi', 67.0, 24.86, 'f'),
-    cities: [c('Lahore', 74.34, 31.55, 'f'), c('Rawalpindi', 73.04, 33.6, 'e'), c('Peshawar', 71.5, 34.0, 'f'), c('Quetta', 66.99, 30.18, 'r'), c('Attock', 72.25, 33.77, 'o'), c('Dhaka', 90.41, 23.81, 'f'), c('Chittagong', 91.8, 22.33, 'w'), c('Multan', 71.47, 30.2, 'f')],
+    cities: [c('Lahore', 74.34, 31.55, 'f'), c('Rawalpindi', 73.04, 33.6, 'e'), c('Peshawar', 71.5, 34.0, 'f'), c('Quetta', 66.99, 30.18, 'r'), c('Dhaka', 90.41, 23.81, 'f'), c('Chittagong', 91.8, 22.33, 'w'), c('Multan', 71.47, 30.2, 'f')],
     deposits: [c('Kalabagh Iron Ore', 71.5, 32.9, 's'), c('Chagai Copper Hills', 62.8, 29.1, 'r')] },
   { code: 'ZAF', name: 'South Africa', color: '#9f8f5f', tier: 'medium', n: 45, blurb: 'Gold of the Witwatersrand and coal-to-oil plants.',
     bonus: { money: 800, rare: 40, steel: 200 },
@@ -330,28 +339,66 @@ export const PLAYABLE = [
  * How many cities (the capital included) each playable country has on the map. Super and major countries 7,
  * medium countries 6, small playable countries 3 to 5. Every other province is rural. Edit and re-run the generator.
  */
-const SMALL_CITIES = { SWE: 4, NOR: 3, FIN: 3, ROU: 4, YUG: 4, CZE: 4, IRQ: 3, KOR: 4, CHL: 3, THA: 5, MMR: 4, PHL: 5, VNM: 4, VEN: 4 };
+const SMALL_CITIES = { SWE: 4, NOR: 3, FIN: 3, ROU: 4, YUG: 4, CZE: 4, IRQ: 4, KOR: 4, CHL: 3, THA: 5, MMR: 4, PHL: 5, VNM: 4, VEN: 4 };
 export const cityTarget = (sp) => (sp.tier === 'super' || sp.tier === 'major' ? 7 : (SMALL_CITIES[sp.code] ?? 6));
 
 /** Hand-picked cities for the super and major countries (besides the capital), so the map keeps each country's real centres. */
 export const KEEP_CITIES = {
-  USA: ['New York', 'Chicago', 'Los Angeles', 'Detroit', 'Denver', 'Portland'],
-  SOV: ['Leningrad', 'Kiev', 'Baku', 'Novosibirsk', 'Vladivostok', 'Murmansk'],
-  CHN: ['Shanghai', 'Beijing', 'Wuhan', 'Canton', 'Lanzhou', 'Kunming'],
-  IND: ['Bombay', 'Calcutta', 'Madras', 'Hyderabad', 'Digboi', 'Trivandrum'],
-  BRA: ['Sao Paulo', 'Salvador', 'Recife', 'Belem', 'Porto Alegre', 'Belo Horizonte'],
-  FRA: ['Lyon', 'Marseille', 'Bordeaux', 'Lille', 'Strasbourg', 'Noumea'],
-  GER: ['Hamburg', 'Munich', 'Cologne', 'Essen', 'Leipzig', 'Hanover'],
-  CAN: ['Toronto', 'Montreal', 'Vancouver', 'Edmonton', 'Sudbury', 'Winnipeg'],
-  AUS: ['Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Roma', 'Hobart'],
-  ARG: ['Cordoba', 'Rosario', 'Mendoza', 'Tucuman', 'Bahia Blanca', 'Ushuaia'],
-  MEX: ['Guadalajara', 'Monterrey', 'Tampico', 'Zacatecas', 'Merida', 'Tijuana'],
-  IDN: ['Surabaya', 'Medan', 'Palembang', 'Balikpapan', 'Pontianak', 'Makassar'],
-  GBR: ['Birmingham', 'Manchester', 'Liverpool', 'Glasgow', 'Grangemouth', 'Camborne'],
-  JPN: ['Osaka', 'Nagoya', 'Yawata', 'Hiroshima', 'Sapporo', 'Niigata'],
-  // small playable countries: only where the automatic pick would drop a famous place
-  ROU: ['Ploiesti', 'Hunedoara', 'Baia Mare'],
-  SWE: ['Gothenburg', 'Boliden', 'Kvarntorp'],
-  IRQ: ['Basra', 'Zakho'],
-  TUR: ['Istanbul', 'Izmir', 'Karabuk', 'Samsun', 'Batman', 'Adana'],
+  // Super and major countries: the full list (besides the capital), chosen for history and for a city near every important frontier.
+  USA: ['Chicago', 'Houston', 'Los Angeles', 'Seattle', 'Denver', 'Detroit'],
+  SOV: ['Petrozavodsk', 'Kiev', 'Baku', 'Tashkent', 'Novosibirsk', 'Vladivostok'],
+  CHN: ['Beijing', 'Kunming', 'Urumqi', 'Kashgar', 'Ngari', 'Harbin'],
+  IND: ['Srinagar', 'Jodhpur', 'Bombay', 'Calcutta', 'Madras', 'Imphal'],
+  BRA: ['Salvador', 'Manaus', 'Campo Grande', 'Porto Alegre', 'Boa Vista', 'Rio Branco'],
+  FRA: ['Lille', 'Strasbourg', 'Lyon', 'Marseille', 'Toulouse', 'Bordeaux'],
+  GER: ['Hamburg', 'Cologne', 'Munich', 'Leipzig', 'Hanover', 'Essen'],
+  CAN: ['Winnipeg', 'Edmonton', 'Vancouver', 'Whitehorse', 'Halifax', 'Quebec'],
+  AUS: ['Brisbane', 'Perth', 'Darwin', 'Adelaide', 'Alice Springs', 'Wewak'],
+  ARG: ['Cordoba', 'Mendoza', 'Salta', 'Posadas', 'Neuquen', 'Comodoro Rivadavia'],
+  MEX: ['Monterrey', 'Ciudad Juarez', 'Tijuana', 'Guadalajara', 'Tampico', 'Tapachula'],
+  IDN: ['Surabaya', 'Medan', 'Palembang', 'Balikpapan', 'Makassar', 'Merauke'],
+  GBR: ['Birmingham', 'Manchester', 'Glasgow', 'Belfast', 'Camborne', 'Southampton'],
+  JPN: ['Osaka', 'Fukuoka', 'Sapporo', 'Sendai', 'Niigata', 'Hiroshima'],
+  TUR: ['Istanbul', 'Izmir', 'Adana', 'Kars', 'Van', 'Karabuk'],
 };
+
+/**
+ * Extra candidate cities near other countries' borders, so every frontier has a city to defend it and counter-attack from.
+ * The generator picks from these and the country's own list (see pickCities in generate-map.mjs). [name, lon, lat, resource]
+ */
+export const BORDER_CITIES = {
+  PAK: [['Quetta', 66.99, 30.18, 'r'], ['Gilgit', 74.3, 35.92, 'w'], ['Dacca', 90.41, 23.81, 'f'], ['Dalbandin', 64.4, 28.89, 'f']],
+  IND: [['Jodhpur', 73.02, 26.29, 'f'], ['Bikaner', 73.31, 28.02, 'f'], ['Imphal', 93.94, 24.82, 'w'], ['Leh', 77.58, 34.16, 'r'], ['Shillong', 91.88, 25.57, 'w']],
+  CHN: [['Kashgar', 75.99, 39.47, 'o'], ['Yining', 81.32, 43.91, 'f'], ['Hohhot', 111.67, 40.84, 'f'], ['Qiqihar', 123.95, 47.34, 'f'], ['Ngari', 80.1, 32.5, 'r']],
+  BRA: [['Rio Branco', -67.81, -9.97, 'w'], ['Boa Vista', -60.67, 2.82, 'f'], ['Campo Grande', -54.62, -20.46, 'f'], ['Macapa', -51.07, 0.03, 'w'], ['Foz do Iguacu', -54.59, -25.55, 'e'], ['Sao Gabriel', -67.09, -0.13, 'w']],
+  USA: [['Juneau', -134.42, 58.3, 'w'], ['Fairbanks', -147.72, 64.84, 'o'], ['El Paso', -106.49, 31.76, 'f'], ['Buffalo', -78.88, 42.89, 's']],
+  CAN: [['Whitehorse', -135.05, 60.72, 'r'], ['Thunder Bay', -89.25, 48.38, 'w'], ['Windsor', -83.03, 42.31, 'e']],
+  COL: [['Pasto', -77.28, 1.21, 'f'], ['Cucuta', -72.5, 7.89, 'o'], ['Leticia Amazonas', -69.94, -4.2, 'w']],
+  VEN: [['Santa Elena', -61.11, 4.6, 'r'], ['San Cristobal', -72.23, 7.77, 'f']],
+  CHL: [['Arica', -70.31, -18.48, 'f'], ['Calama', -68.93, -22.46, 'r']],
+  ESP: [['Sidi Ifni', -10.17, 29.38, 'f'], ['El Aaiun', -13.2, 27.15, 'r'], ['Villa Cisneros', -15.93, 23.7, 'f']],
+  SOV: [['Ashgabat', 58.38, 37.95, 'o'], ['Termez', 67.27, 37.22, 'f'], ['Yerevan', 44.5, 40.18, 's'], ['Petrozavodsk', 34.36, 61.79, 'w'], ['Khabarovsk', 135.08, 48.48, 's'], ['Kishinev', 28.86, 47.0, 'f']],
+  SWE: [['Kiruna', 20.23, 67.86, 's'], ['Haparanda', 24.14, 65.84, 'w']],
+  NOR: [['Kirkenes', 30.05, 69.73, 's'], ['Alta', 23.27, 69.97, 'f']],
+  FIN: [['Salla', 28.67, 66.83, 'w'], ['Kuusamo', 29.18, 65.97, 'w']],
+  ETH: [['Gode', 43.55, 5.95, 'f'], ['Moyale', 39.05, 3.52, 'f']],
+  ZAF: [['Upington', 21.25, -28.45, 'f'], ['Messina', 30.04, -22.35, 'r'], ['Nelspruit', 30.97, -25.47, 'f']],
+  IRN: [['Zahedan', 60.86, 29.5, 'r'], ['Mashhad', 59.6, 36.3, 'f'], ['Tabriz', 46.29, 38.08, 'f']],
+  TUR: [['Van', 43.38, 38.5, 'f'], ['Kars', 43.09, 40.6, 'f'], ['Hatay', 36.16, 36.2, 'f']],
+  IRQ: [['Samawah', 45.29, 31.31, 'f'], ['Sulaymaniyah', 45.43, 35.56, 'o']],
+  EGY: [['Siwa', 25.52, 29.2, 'f'], ['Sallum', 25.15, 31.57, 'f']],
+  SAU: [['Turaif', 38.65, 31.67, 'f'], ['Shaybah', 53.65, 22.5, 'o'], ['Sharurah', 47.1, 17.48, 'f']],
+  MMR: [['Kengtung', 99.6, 21.29, 'w'], ['Myitkyina', 97.4, 25.38, 'r']],
+  IDN: [['Merauke', 140.4, -8.5, 'f'], ['Tarakan', 117.58, 3.3, 'o']],
+  AUS: [['Wewak', 143.63, -3.55, 'w'], ['Alice Springs', 133.88, -23.7, 'f']],
+  MEX: [['Ciudad Juarez', -106.49, 31.69, 'f'], ['Nuevo Laredo', -99.51, 27.48, 'o'], ['Tapachula', -92.26, 14.9, 'f']],
+  ARG: [['Jujuy', -65.3, -24.19, 'r'], ['Formosa', -58.18, -26.18, 'f'], ['Rio Gallegos', -69.22, -51.62, 'o']],
+  PER: [['Tacna', -70.25, -18.01, 'f'], ['Puerto Maldonado', -69.19, -12.6, 'w']],
+  GER: [['Aachen', 6.08, 50.78, 's'], ['Passau', 13.46, 48.57, 'f']],
+  POL: [['Przemysl', 22.77, 49.78, 'f'], ['Bialystok', 23.16, 53.13, 'f']],
+  ROU: [['Satu Mare', 22.88, 47.79, 'f'], ['Galati', 28.04, 45.44, 's']],
+  KOR: [['Chunchon', 127.73, 37.88, 'f']],
+};
+
+/** Cities a smaller country must keep whatever the frontier rule says (they are why the country matters). */
+export const MUST_CITIES = { TUR: ['Karabuk'], PAK: ['Quetta', 'Gilgit', 'Lahore'], ROU: ['Ploiesti'], SAU: ['Dhahran'], IRQ: ['Basra'], IRN: ['Abadan'] };
