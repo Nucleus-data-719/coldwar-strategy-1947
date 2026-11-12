@@ -239,7 +239,7 @@ All 11 unit images are already included (cut out of your JPGs). To replace one, 
 
 ## Week 12 follow-up (roads, sea lanes, army panel)
 - Every pair of neighbouring provinces now has a road. Roads run through the border crossing of the two provinces (never across open water) and are drawn faint; highways (out of capitals) are a little stronger.
-- Railways: once two neighbouring provinces both have a finished Railway, the road between them is drawn as a railway (dark bed, sleepers, two rails) and travel between them takes half the time.
+- Railways: a finished Railway in a province turns every road of that province into a railway (dark bed, sleepers, two rails) and travel on those roads takes half the time (changed in the map-fix round; before, both ends needed one).
 - Sea lanes: a net of dots covers the oceans (shown when a ship is selected or a sea order is planned). Ships sail from port to port along the dots, ferries follow them too. Every coastal province has a harbour dot.
 - Selecting an army shows only the army panel (Move / Attack, Cancel orders); close it to return to the province tabs.
 - Regenerate the map after changing `map-source.mjs`: `node packages/shared/scripts/generate-map.mjs`.
@@ -314,4 +314,41 @@ No database changes. Restart the server.
 
 **To upgrade:** run `docs/map-rebuild.sql` in the Neon SQL editor (adds the wood column and deletes the old campaigns, because the old province keys no longer exist), restart the server, and a fresh campaign is created. `npm run db:push` also adds the column.
 
-**Known limits:** the game state is now about 350 KB per refresh and the sea-route search scans about 3,000 dots, so slow responses will be more noticeable until Week 16 (compact state, indexed queries). AI countries start with the same stockpile and garrison per province as before. Balance numbers are first guesses.
+**Known limits:** the game state is now about 350 KB per refresh and the sea-route search scans about 3,000 dots, (addressed in Week 16). AI countries start with the same stockpile and garrison per province as before. Balance numbers are first guesses.
+
+## Week 16: performance, security, closed beta
+
+Full notes, backups and the tester checklist are in `docs/week16.md`. No database change this week.
+
+- **Faster:** the state call reads in parallel (one round trip instead of a dozen), large answers are gzipped (about 10x smaller), sea routes use a priority queue, AI countries decide four at a time, and the browser refreshes at most every 1.5 s on server pushes.
+- **Timing:** requests slower than `SLOW_REQUEST_MS` are logged. `GET /api/metrics` (header `x-admin-token`, from `ADMIN_TOKEN` in `.env`) lists p50/p95/max per route. `GET /api/health` is for uptime checks.
+- **Security:** security headers, 64 KB body limit, HS256-pinned sessions, rate limits you can set (`RATE_LIMIT_PER_MIN`, `AUTH_RATE_LIMIT_PER_MIN`), `TRUST_PROXY=1` behind a proxy. Every body and id was already validated; this week's review confirmed it.
+- **Closed beta:** set `BETA_INVITE_CODES=code1,code2` in `.env` and registering asks for a code (the sign-up form has the field).
+- **Load test:** `node scripts/load-test.mjs --players 50 --minutes 2` (see `docs/week16.md` for the temporary limits to raise). Clean up with `docs/week16-cleanup.sql`.
+- **New `.env` values** (all optional): `BETA_INVITE_CODES`, `ADMIN_TOKEN`, `SLOW_REQUEST_MS`, `AI_CONCURRENCY`, `AI_MAX_PER_TICK`, `TRUST_PROXY`, `RATE_LIMIT_PER_MIN`, `AUTH_RATE_LIMIT_PER_MIN`.
+
+**Not measured here:** the sandbox has no database, so the load test and the server timings could not be run in this build. Run the script on your machine and on the hosted server and send me the table; the next fixes should follow its numbers.
+
+**Backlog:** a 3D, Hearts of Iron IV style terrain map (logged in the plan).
+
+## Map fixes, round 1
+
+No database change. **Garrison changes apply to new campaigns only**, so create a new campaign to see them (old campaigns keep their garrisons).
+
+- **Names:** only cities (and capitals, with a star) show a name on the map. Plains, woods and hills are named in their panel.
+- **Troop counts:** the number of troops no longer shows on provinces or cities. Your armies are still drawn as figures, and the panel shows the numbers.
+- **Thinner lines:** ordinary borders are one screen pixel at any zoom; your provinces (gold) and enemy provinces (red) are only slightly stronger; selection is a thin white line. Roads, highways, ferries and railways are about half as wide.
+- **Garrisons:** each city, the capital included, starts with 5 infantry. Rural provinces start empty, and an army entering an undefended province takes it without a fight.
+- **Railways:** a finished railway turns every road of its province into a railway on the map and halves travel time on all of them (see `railLeg` in `movement.ts`). Before, both ends needed a railway, so the first one showed nothing.
+- **Logged for later:** the 3D, Hearts of Iron IV style map (in the plan).
+
+## Map fixes, round 2
+
+**Restart the server after unzipping.** The map changed (many cities became ordinary provinces, so their keys changed), so campaigns made before this build are hidden automatically and a fresh "Classic Cold War 1947" campaign is created. No SQL is needed (`docs/map-rebuild.sql` still deletes the hidden ones if you want them gone).
+
+- **Cities per country** (capital included): super and major countries 7, medium countries 6, small playable countries 3 to 5. Every other province is rural. Set in `scripts/map-source.mjs` (`cityTarget`, `KEEP_CITIES`); a country with only 3 cities may lack one resource, which is the point of being small. Re-run `node packages/shared/scripts/generate-map.mjs` after editing.
+- **Garrisons:** 5 infantry per city, none in rural provinces (round 1), so with fewer cities there are far fewer garrisons.
+- **Railways:** drawn only inside the province that has one: a thin black track from its centre to the border. A road between two railway provinces is drawn in full. Travel: a railway doubles speed inside its own province, so with one end it takes 75% of the time and with both ends 50% (`railEnds` in `movement.ts`).
+- **Zoomed-out view (Hearts of Iron IV style):** below zoom 0.9 the map shows whole countries in one colour with thin borders and a large name laid along each country (`strategic-view.ts`). Provinces, roads, railways, icons and building badges are not drawn at all in that view, which is what makes the world view fast. Zoom in to see provinces. Clicking a country selects its capital. Orders to a province need the province view.
+- **Depth look:** a pale shallow-water halo around the coasts, a dark slab under the land and a soft vignette. This is a 2.5D look, not a tilted camera.
+- **Not done:** a real tilted 3D camera (perspective, terrain textures). It needs a different renderer and a rewrite of clicking and army drawing, so it is a separate piece of work.

@@ -89,7 +89,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   railway: {
     type: 'railway',
     name: 'Railway',
-    description: 'Halves army travel time between two of your provinces that both have a railway.',
+    description: 'Doubles army speed inside this province, on every road that crosses it. Build it at both ends of a road to halve the whole trip.',
     cost: { wood: 80, money: 300, steel: 120 },
     buildSeconds: 3600,
     effectActive: true,

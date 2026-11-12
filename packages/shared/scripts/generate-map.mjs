@@ -7,7 +7,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AI_CAPITAL_RESOURCE, AI_CITIES, CAPITAL_FIX, MERGE, PLAYABLE, RENAME } from './map-source.mjs';
+import { AI_CAPITAL_RESOURCE, AI_CITIES, CAPITAL_FIX, MERGE, PLAYABLE, RENAME, KEEP_CITIES, cityTarget } from './map-source.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const T0 = Date.now();
@@ -177,6 +177,24 @@ for (let k = 0; k < countries.length; k++) {
 lap(`${compCount} country landmasses`);
 
 // ---------- fixed seeds: capitals, cities, deposits ----------
+// Keeps the first cities of a country's list up to its target, but prefers a city that supplies a resource the
+// country would otherwise lack (capital and the two deposits count as supplied).
+function pickCities(sp) {
+  const keep = KEEP_CITIES[sp.code];
+  if (keep) return keep.map((n) => sp.cities.find((c) => c[0] === n) ?? (console.error(`KEEP_CITIES: ${sp.code} has no city ${n}`), process.exit(1)));
+  const slots = cityTarget(sp) - 1; // the capital is one of the cities
+  const have = new Set([sp.capital[3], ...sp.deposits.map((d) => d[3])]);
+  const all = ['o', 's', 'e', 'r', 'w', 'f'];
+  const picked = [], skipped = [];
+  for (const c of sp.cities) {
+    if (picked.length >= slots) break;
+    const uncovered = all.filter((r) => !have.has(r));
+    const spare = slots - picked.length;
+    if (uncovered.includes(c[3]) || uncovered.length < spare) { picked.push(c); have.add(c[3]); } else skipped.push(c);
+  }
+  for (const c of skipped) { if (picked.length >= slots) break; picked.push(c); }
+  return picked;
+}
 const fixedOf = countries.map(() => []); // {name, lon, lat, res, doubled, city, capital}
 const warn = [];
 for (let k = 0; k < countries.length; k++) {
@@ -184,7 +202,7 @@ for (let k = 0; k < countries.length; k++) {
   if (ct.spec) {
     const sp = ct.spec;
     fixedOf[k].push({ name: sp.capital[0], lon: sp.capital[1], lat: sp.capital[2], res: sp.capital[3], city: true, capital: true });
-    for (const c of sp.cities) fixedOf[k].push({ name: c[0], lon: c[1], lat: c[2], res: c[3], city: true });
+    for (const c of pickCities(sp)) fixedOf[k].push({ name: c[0], lon: c[1], lat: c[2], res: c[3], city: true });
     for (const d of sp.deposits) fixedOf[k].push({ name: d[0], lon: d[1], lat: d[2], res: d[3], doubled: true, city: false });
   } else {
     const first = ct.cs[0];

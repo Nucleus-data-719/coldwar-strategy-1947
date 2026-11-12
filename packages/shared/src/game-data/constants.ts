@@ -13,12 +13,10 @@ export const STARTING_RESOURCES: Resources = {
 
 /** Every country keeps one standing formation per province with this name. */
 export const GARRISON_NAME = 'Garrison';
-/** Infantry placed in every capital when a campaign is created. */
+/** Infantry placed in every city (the capital included) when a campaign is created. Other provinces start empty. */
 export const STARTING_GARRISON = 5;
 /** What recruitment centers produce. */
 export const RECRUIT_UNIT: UnitType = 'infantry';
-/** Infantry placed in every other province when a campaign is created, so land is defended. */
-export const STARTING_PROVINCE_GARRISON = 2;
 /** After capture a province produces nothing for this long (game seconds). */
 export const OCCUPATION_DISRUPTION_SECONDS = 6 * 3600;
 /** Share of the loser's stockpile the captor takes when a capital falls. */

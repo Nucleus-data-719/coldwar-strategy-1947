@@ -113,16 +113,19 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
   useEffect(() => {
     const socket = getSocket();
     let timer: number | undefined;
+    // Throttled, not debounced: with 150 AI countries something changes every few seconds, and a
+    // debounce would either never fire or refetch the whole map on every message. One refresh per 1.5 s at most.
     const refresh = () => {
-      window.clearTimeout(timer);
+      if (timer !== undefined) return;
       timer = window.setTimeout(() => {
+        timer = undefined;
         qc.invalidateQueries({ queryKey: ['state', campaignId] });
         qc.invalidateQueries({ queryKey: ['province', campaignId] });
         qc.invalidateQueries({ queryKey: ['battles', campaignId] });
         qc.invalidateQueries({ queryKey: ['wars', campaignId] });
         qc.invalidateQueries({ queryKey: ['generals', campaignId] });
         qc.invalidateQueries({ queryKey: ['diplomacy', campaignId] });
-      }, 200);
+      }, 1500);
     };
     const onNotification = (n?: { type?: string }) => {
       qc.invalidateQueries({ queryKey: ['notifications', campaignId] });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, type Texture } from 'pixi.js';
+import { createStrategicView, type StrategicView } from './strategic-view';
 import { unitArtUrls } from '../../components/unit-art';
 import { TOKEN_BOTTOM, TOKEN_HALF_WIDTH, TOKEN_TOP, drawToken, formationClass } from './army-token';
 import { drawResourceIcon, resourceIconsFor } from './resource-icons';
@@ -151,6 +152,7 @@ interface Ctx {
   shapes: Map<string, Shape>;
   bRows: Map<string, BuildingRow>;
   makeLabel: (geo: ProvinceGeo, shape: Shape) => Text;
+  strategic: StrategicView;
   dispose: () => void;
 }
 
@@ -184,6 +186,8 @@ function leadUnit(units: { unitType: string; count: number }[]): string | null {
 }
 
 const hex = (c: string) => parseInt(c.replace('#', ''), 16);
+/** Below this zoom the map shows whole countries; at or above it, provinces. */
+const STRATEGIC_BELOW = 0.9;
 const centerOf = (key: string) => PROVINCE_BY_KEY[key].center;
 
 
@@ -358,6 +362,27 @@ export function WorldMap({
           world.addChild(g);
           shapes.set(geo.key, { g, label: null, nameLabel: null, icons: null, sig: '', labelText: '' });
         }
+        // Zoomed-out view: whole countries, borders and names. Shown instead of the provinces below STRATEGIC_BELOW.
+        const strategic = createStrategicView({
+          isDragging: () => dragMoved.current,
+          onSelect: (key) => onSelectRef.current(key),
+        });
+        world.addChildAt(strategic.container, 0);
+
+        // Depth: the land stands on a slab. A pale shallow-water halo around the coasts and a dark offset copy of the
+        // land underneath give the flat map a raised, 3D look. Static: drawn once, never redrawn.
+        const halo = new Graphics();
+        halo.eventMode = 'none';
+        for (const geo of PROVINCES) halo.poly(geo.polygon);
+        halo.stroke({ width: 16, color: 0x2a5f84, alpha: 0.16, join: 'round' });
+        const slab = new Graphics();
+        slab.eventMode = 'none';
+        for (const geo of PROVINCES) slab.poly(geo.polygon);
+        slab.fill({ color: 0x02070c, alpha: 0.55 });
+        slab.position.set(4, 6);
+        world.addChildAt(slab, 0);
+        world.addChildAt(halo, 0);
+
         // Roads: land forces travel only along these. They run through the border crossing of the two provinces,
         // never across open water. Highways run out of capitals; ferries follow the sea dots. Kept faint so they
         // do not fight with the map.
@@ -384,18 +409,37 @@ export function WorldMap({
               for (const [x, y] of pts.slice(1)) roadsG.lineTo(x, y);
             }
           }
-          if (kind === 'road') roadsG.stroke({ width: 0.9, color: 0xf1ead2, alpha: 0.16 });
-          else if (kind === 'highway') roadsG.stroke({ width: 1.3, color: 0xffe9a0, alpha: 0.24 });
-          else roadsG.stroke({ width: 1, color: 0x9fd0ff, alpha: 0.4 });
+          if (kind === 'road') roadsG.stroke({ width: 0.5, color: 0xf1ead2, alpha: 0.16 });
+          else if (kind === 'highway') roadsG.stroke({ width: 0.7, color: 0xffe9a0, alpha: 0.24 });
+          else roadsG.stroke({ width: 0.6, color: 0x9fd0ff, alpha: 0.4 });
         }
-        for (const geo of PROVINCES) roadsG.circle(geo.center.x, geo.center.y, 1.6).fill({ color: 0xf1ead2, alpha: 0.25 });
+        for (const geo of PROVINCES) roadsG.circle(geo.center.x, geo.center.y, 1).fill({ color: 0xf1ead2, alpha: 0.25 });
 
-        // Railways: drawn over a road once both provinces have a finished railway. Dark bed, sleepers and two rails,
-        // so it can never be mistaken for a plain road.
+        // Railways: a thin black track with fine ties, drawn only inside the province that has the railway: from its
+        // centre to the border crossing. A road between two railway provinces gets the whole line.
         const railG = new Graphics();
         railG.eventMode = 'none';
         world.addChild(railG);
         let railDrawn = '';
+        // the part of a road path from one end up to its half-way point (by length), where it crosses the border
+        const halfPath = (pts: [number, number][], fromStart: boolean): [number, number][] => {
+          const ordered = fromStart ? pts : [...pts].reverse();
+          let total = 0;
+          for (let i = 1; i < ordered.length; i++) total += Math.hypot(ordered[i][0] - ordered[i - 1][0], ordered[i][1] - ordered[i - 1][1]);
+          const out: [number, number][] = [ordered[0]];
+          let run = 0;
+          for (let i = 1; i < ordered.length; i++) {
+            const seg = Math.hypot(ordered[i][0] - ordered[i - 1][0], ordered[i][1] - ordered[i - 1][1]);
+            if (run + seg >= total / 2) {
+              const t = seg === 0 ? 0 : (total / 2 - run) / seg;
+              out.push([ordered[i - 1][0] + (ordered[i][0] - ordered[i - 1][0]) * t, ordered[i - 1][1] + (ordered[i][1] - ordered[i - 1][1]) * t]);
+              return out;
+            }
+            out.push(ordered[i]);
+            run += seg;
+          }
+          return out;
+        };
         const drawRails = () => {
           if (railDrawn === railRef.current) return;
           railDrawn = railRef.current;
@@ -403,37 +447,28 @@ export function WorldMap({
           const have = new Set(railRef.current ? railRef.current.split(',') : []);
           const lines: [number, number][][] = [];
           for (const r of ROADS) {
-            if (r.kind === 'ferry' || !have.has(r.a) || !have.has(r.b)) continue;
-            lines.push(roadPath(r.a, r.b));
+            if (r.kind === 'ferry') continue;
+            const hasA = have.has(r.a), hasB = have.has(r.b);
+            if (!hasA && !hasB) continue;
+            const full = roadPath(r.a, r.b);
+            if (hasA && hasB) lines.push(full);
+            else lines.push(halfPath(full, hasA));
           }
-          // thin dark outline so the track stands out from the land
           for (const pts of lines) { railG.moveTo(pts[0][0], pts[0][1]); for (const [x, y] of pts.slice(1)) railG.lineTo(x, y); }
-          railG.stroke({ width: 3.6, color: 0x1c1f1c, alpha: 0.45 });
-          // ties across the line, close together like a ladder
+          railG.stroke({ width: 0.55, color: 0x0d0d0d, alpha: 0.95 });
+          // fine ties across the track
           for (const pts of lines) {
             for (let i = 0; i + 1 < pts.length; i++) {
               const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
               const len = Math.hypot(bx - ax, by - ay) || 1;
               const nx = -(by - ay) / len, ny = (bx - ax) / len;
-              for (let d = 2; d < len; d += 4) {
+              for (let d = 1.5; d < len; d += 2.6) {
                 const cx = ax + ((bx - ax) * d) / len, cy = ay + ((by - ay) * d) / len;
-                railG.moveTo(cx - nx * 3, cy - ny * 3).lineTo(cx + nx * 3, cy + ny * 3);
+                railG.moveTo(cx - nx * 1.1, cy - ny * 1.1).lineTo(cx + nx * 1.1, cy + ny * 1.1);
               }
             }
           }
-          railG.stroke({ width: 1, color: 0x2b2a26, alpha: 0.95 });
-          // two light rails
-          for (const side of [-1.3, 1.3]) {
-            for (const pts of lines) {
-              for (let i = 0; i + 1 < pts.length; i++) {
-                const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
-                const len = Math.hypot(bx - ax, by - ay) || 1;
-                const nx = (-(by - ay) / len) * side, ny = ((bx - ax) / len) * side;
-                railG.moveTo(ax + nx, ay + ny).lineTo(bx + nx, by + ny);
-              }
-            }
-            railG.stroke({ width: 0.8, color: 0xeeeeea, alpha: 1 });
-          }
+          railG.stroke({ width: 0.3, color: 0x0d0d0d, alpha: 0.9 });
         };
         app.ticker.add(drawRails);
 
@@ -581,12 +616,30 @@ export function WorldMap({
         });
 
         // Keep labels a readable size at every zoom, and only show detail when zoomed in, and only for what is on screen.
-        let lastScale = -1, viewX = NaN, viewY = NaN;
+        let lastScale = -1, viewX = NaN, viewY = NaN, stratOn = false;
         const syncLabels = () => {
           const sc = world.scale.x;
           const px = world.position.x, py = world.position.y;
           if (sc === lastScale && px === viewX && py === viewY) return;
           lastScale = sc; viewX = px; viewY = py;
+          // Strategic view below the threshold (with a little hysteresis so it does not flicker at the edge).
+          const strat = sc < (stratOn ? STRATEGIC_BELOW + 0.08 : STRATEGIC_BELOW);
+          if (strat !== stratOn) {
+            stratOn = strat;
+            strategic.container.visible = strat;
+            for (const s of shapes.values()) {
+              s.g.visible = !strat;
+              if (strat) {
+                if (s.icons) s.icons.visible = false;
+                if (s.label) s.label.visible = false;
+                if (s.nameLabel) s.nameLabel.visible = false;
+              }
+            }
+            for (const row of bRows.values()) if (strat) row.box.visible = false;
+            roadsG.visible = !strat;
+            railG.visible = !strat;
+          }
+          if (strat) { strategic.syncLabels(sc); return; }
           const x0 = -px / sc - 60, x1 = (app.screen.width - px) / sc + 60;
           const y0 = -py / sc - 60, y1 = (app.screen.height - py) / sc + 60;
           for (const geo of PROVINCES) {
@@ -605,7 +658,8 @@ export function WorldMap({
               shape.label.visible = sc >= 0.7 && inView;
               shape.label.scale.set(0.9 / sc);
             }
-            if (sc >= 1.5 && inView) {
+            // Only cities carry a name on the map; plains, hills and the rest are named in their panel.
+            if (sc >= 1.5 && inView && (geo.isCity || geo.isCapital)) {
               const nl = shape.nameLabel ?? makeName(geo, shape);
               nl.visible = true;
               nl.scale.set(0.85 / sc);
@@ -1008,6 +1062,7 @@ export function WorldMap({
           shapes,
           bRows,
           makeLabel,
+          strategic,
           dispose: () => {
             resizeObserver.disconnect();
             app.ticker.remove(drawArmies);
@@ -1043,6 +1098,10 @@ export function WorldMap({
     const stateByKey = new Map(provinces.map((p) => [p.key, p]));
     const atWarSet = new Set(atWarWith);
     const capitalKeys = new Set(countries.map((c) => c.capitalProvinceKey).filter(Boolean));
+    ctx.strategic.update(
+      PROVINCES.map((geo) => stateByKey.get(geo.key)?.ownerCountryId ?? ''),
+      countries.map((c) => ({ id: c.id, name: c.name, color: hex(c.color), clickKey: c.capitalProvinceKey })),
+    );
 
     for (const geo of PROVINCES) {
       const shape = ctx.shapes.get(geo.key);
@@ -1079,12 +1138,19 @@ export function WorldMap({
                       ? DIPLOMACY_COLORS.You
                       : (DIPLOMACY_COLORS[stageLabel(relationByCountry?.[st.ownerCountryId])] ?? DIPLOMACY_COLORS.Neutral)
                     : (colorById.get(st.ownerCountryId) ?? 0x555555),
-          alpha: mode === 'political' ? (mine ? 0.95 : 0.7) : mine ? 0.95 : 0.85,
+          alpha: mode === 'political' ? (mine ? 0.95 : 0.86) : mine ? 0.95 : 0.88,
         })
-        .stroke({
-          width: selected ? 4 : mine ? 2 : enemy ? 2 : 1,
-          color: selected ? 0xffffff : mine ? 0xffe27a : enemy ? 0xe5483f : 0x0b1d2e,
-        });
+        // Thin lines: ordinary borders are one screen pixel at any zoom (pixelLine); your own and enemy provinces
+        // are only slightly stronger so they still read at a glance.
+        .stroke(
+          selected
+            ? { width: 1.6, color: 0xffffff }
+            : mine
+              ? { width: 0.5, color: 0xffe27a, alpha: 0.9 }
+              : enemy
+                ? { width: 0.5, color: 0xe5483f, alpha: 0.9 }
+                : { width: 1, color: 0x0b1d2e, alpha: 0.75, pixelLine: true },
+        );
 
       // Building badges.
       const row = ctx.bRows.get(geo.key);
@@ -1132,7 +1198,6 @@ export function WorldMap({
 
       const parts: string[] = [];
       if (capitalKeys.has(geo.key)) parts.push('★');
-      if (st.unitCount > 0) parts.push(`⚔${st.unitCount}`);
       const text = parts.join(' ');
       if (text !== shape.labelText) {
         shape.labelText = text;

@@ -8,6 +8,7 @@ export function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [invite, setInvite] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -17,7 +18,7 @@ export function AuthPage() {
     setError(null);
     try {
       if (mode === 'login') await api.login(username, password);
-      else await api.register(username, password);
+      else await api.register(username, password, invite);
       await qc.invalidateQueries({ queryKey: ['me'] });
     } catch (err) {
       setError((err as Error).message);
@@ -59,6 +60,12 @@ export function AuthPage() {
             required
           />
         </label>
+        {mode === 'register' && (
+          <label>
+            Invite code (closed beta)
+            <input value={invite} onChange={(e) => setInvite(e.target.value)} autoComplete="off" placeholder="from your invitation" />
+          </label>
+        )}
         {mode === 'register' && <p className="muted small">3–24 letters, numbers or underscores. Password 8+ characters.</p>}
         {error && <p className="error">{error}</p>}
         <button className="primary" disabled={busy}>

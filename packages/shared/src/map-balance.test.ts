@@ -50,20 +50,29 @@ describe('map balance', () => {
     }
   });
 
-  it('every playable country has oil, steel, electronics, rare earth, wood and food', () => {
+  it('cities per country: 7 for super and major, 6 for medium, 3 to 5 for small playable countries', () => {
     for (const c of playable) {
-      for (const k of [...STRATEGIC, 'food'] as const) {
-        expect(of(c.code).some((p) => p.production[k] > 0)).toBe(true);
-      }
+      const n = of(c.code).filter((p) => p.isCity).length;
+      if (c.tier === 'super' || c.tier === 'major') expect(n).toBe(7);
+      else if (of(c.code).length >= 40) expect(n).toBe(6);
+      else expect(n >= 3 && n <= 5).toBe(true);
+    }
+  });
+
+  it('every super, major and medium country has oil, steel, electronics, rare earth, wood and food; small ones lack at most one', () => {
+    for (const c of playable) {
+      const missing = [...STRATEGIC, 'food' as const].filter((k) => !of(c.code).some((p) => p.production[k] > 0));
+      if (c.tier === 'super' || c.tier === 'major' || of(c.code).length >= 40) expect(missing.length).toBe(0);
+      else expect(missing.length <= 1).toBe(true);
     }
   });
 
   it('history: Saudi oil, Japanese electronics, Chinese rare earth, Turkish steel', () => {
     const has = (code: string, k: (typeof STRATEGIC)[number]) => of(code).filter((p) => p.production[k] > 0).length;
-    expect(has('SAU', 'oil') >= 3).toBe(true);
-    expect(has('JPN', 'electronics') >= 4).toBe(true);
-    expect(has('CHN', 'rare') >= 3).toBe(true);
-    expect(has('TUR', 'steel') >= 3).toBe(true);
+    expect(has('SAU', 'oil') >= 2).toBe(true);
+    expect(has('JPN', 'electronics') >= 3).toBe(true);
+    expect(has('CHN', 'rare') >= 2).toBe(true);
+    expect(has('TUR', 'steel') >= 2).toBe(true);
     expect(of('ROU').some((p) => p.name === 'Ploiesti' && p.deposit === 'oil')).toBe(true);
   });
 

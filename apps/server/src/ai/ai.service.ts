@@ -8,6 +8,7 @@ import {
   scaleSeconds,
   type BuildingType,
 } from '@cw/shared';
+import { timed } from '../common/perf';
 import { env } from '../config/env';
 import { DB, Db } from '../db/db.module';
 import { buildings, campaigns, countries, provinces } from '../db/schema';
@@ -52,24 +53,30 @@ export class AiService {
           or(isNull(countries.aiNextDecisionAt), lte(countries.aiNextDecisionAt, now)),
         ),
       )
-      .limit(50);
+      .limit(env.AI_MAX_PER_TICK);
 
-    for (const c of due) {
-      try {
-        const changed = await this.decide(c.id);
-        if (changed) this.realtime.campaignUpdate(c.campaignId, { kind: 'ai' });
-      } catch (err) {
-        this.log.warn(`AI decision failed for ${c.id}: ${(err as Error).message}`);
-      } finally {
-        // Always schedule the next decision, so a persistent error cannot spin every tick.
-        const interval = this.atWar.has(c.id) ? env.AI_WAR_INTERVAL_SECONDS : env.AI_INTERVAL_SECONDS;
-        const nextMs = Math.max(5, interval / env.GAME_SPEED) * 1000;
-        await this.db
-          .update(countries)
-          .set({ aiNextDecisionAt: new Date(Date.now() + nextMs) })
-          .where(eq(countries.id, c.id));
+    // Several countries decide at once (each takes its own lock), so a tick with many due countries
+    // finishes in a fraction of the time. Concurrency stays below the database pool size.
+    const queue = [...due];
+    const worker = async () => {
+      for (let c = queue.shift(); c; c = queue.shift()) {
+        try {
+          const changed = await this.decide(c.id);
+          if (changed) this.realtime.campaignUpdate(c.campaignId, { kind: 'ai' });
+        } catch (err) {
+          this.log.warn(`AI decision failed for ${c.id}: ${(err as Error).message}`);
+        } finally {
+          // Always schedule the next decision, so a persistent error cannot spin every tick.
+          const interval = this.atWar.has(c.id) ? env.AI_WAR_INTERVAL_SECONDS : env.AI_INTERVAL_SECONDS;
+          const nextMs = Math.max(5, interval / env.GAME_SPEED) * 1000;
+          await this.db
+            .update(countries)
+            .set({ aiNextDecisionAt: new Date(Date.now() + nextMs) })
+            .where(eq(countries.id, c.id));
+        }
       }
-    }
+    };
+    await timed(`AI batch of ${due.length}`, 2000, () => Promise.all(Array.from({ length: Math.min(env.AI_CONCURRENCY, due.length) }, worker)));
   }
 
   /** Returns true if the AI started any construction. */

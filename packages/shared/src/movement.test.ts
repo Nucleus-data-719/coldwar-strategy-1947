@@ -23,9 +23,9 @@ describe('movement', () => {
   });
 
   it('routes through own provinces only', () => {
-    const route = planRoute('washington', 'st_louis', baseCtx)!;
+    const route = planRoute('washington', 'chicago', baseCtx)!;
     expect(route.path[0]).toBe('washington');
-    expect(route.path.at(-1)).toBe('st_louis');
+    expect(route.path.at(-1)).toBe('chicago');
     expect(route.path.length).toBeGreaterThan(2);
     expect(route.legSeconds.length).toBe(route.path.length - 1);
     for (const key of route.path) expect(usa.get(key)).toBe(ME);
@@ -35,20 +35,31 @@ describe('movement', () => {
     expect(planRoute('washington', 'mexico_city', baseCtx)).toBeNull();
   });
 
+  it('a railway in one province speeds up the half of every road that lies inside it', () => {
+    const slow = planRoute('washington', 'chicago', baseCtx)!;
+    const mid = slow.path[1];
+    const one = planRoute('washington', 'chicago', { ...baseCtx, railwayKeys: new Set([mid]) })!;
+    // the two legs touching the railway province take 75% (half the leg is by rail), the rest are unchanged
+    expect(one.totalSeconds < slow.totalSeconds).toBe(true);
+    expect(one.path.join()).toBe(slow.path.join());
+    expect(Math.abs(one.legSeconds[0] - slow.legSeconds[0] * 0.75) <= 1).toBe(true);
+    expect(Math.abs(one.legSeconds[1] - slow.legSeconds[1] * 0.75) <= 1).toBe(true);
+  });
+
   it('railways halve a leg and faster units arrive sooner', () => {
-    const slow = planRoute('washington', 'st_louis', baseCtx)!;
-    const fast = planRoute('washington', 'st_louis', { ...baseCtx, speed: 2 })!;
-    const rail = planRoute('washington', 'st_louis', { ...baseCtx, railwayKeys: new Set(slow.path) })!;
+    const slow = planRoute('washington', 'chicago', baseCtx)!;
+    const fast = planRoute('washington', 'chicago', { ...baseCtx, speed: 2 })!;
+    const rail = planRoute('washington', 'chicago', { ...baseCtx, railwayKeys: new Set(slow.path) })!;
     expect(fast.totalSeconds).toBeLessThan(slow.totalSeconds * 0.6);
     expect(rail.totalSeconds).toBeLessThan(slow.totalSeconds * 0.6);
   });
 
   it('game speed shortens travel', () => {
-    expect(legSeconds('washington', 'pittsburgh', 1, false, 60)).toBeLessThan(legSeconds('washington', 'pittsburgh', 1, false, 1) / 50);
+    expect(legSeconds('washington', 'detroit', 1, false, 60)).toBeLessThan(legSeconds('washington', 'detroit', 1, false, 1) / 50);
   });
 
   it('applies several finished legs after being offline, without drifting', () => {
-    const route = planRoute('washington', 'st_louis', baseCtx)!;
+    const route = planRoute('washington', 'chicago', baseCtx)!;
     const start = 1_000_000;
     const firstArrive = start + route.legSeconds[0] * 1000;
     const input = {
@@ -80,7 +91,7 @@ describe('movement', () => {
   });
 
   it('stops when the next province is no longer ours', () => {
-    const route = planRoute('washington', 'st_louis', baseCtx)!;
+    const route = planRoute('washington', 'chicago', baseCtx)!;
     const lost = new Map(usa);
     lost.set(route.path[2], THEM);
     const result = advanceMovement({

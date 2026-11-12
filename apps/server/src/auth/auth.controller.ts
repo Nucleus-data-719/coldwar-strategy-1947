@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, HttpCode, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
@@ -15,8 +15,9 @@ const registerSchema = z.object({
     .max(24)
     .regex(/^[a-zA-Z0-9_]+$/, 'letters, numbers and underscores only'),
   password: z.string().min(8).max(72),
+  inviteCode: z.string().trim().max(64).optional(),
 });
-const loginSchema = z.object({ username: z.string().trim().min(1), password: z.string().min(1) });
+const loginSchema = z.object({ username: z.string().trim().min(1).max(64), password: z.string().min(1).max(72) });
 
 @Controller('auth')
 export class AuthController {
@@ -37,9 +38,13 @@ export class AuthController {
   }
 
   @Post('register')
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: env.AUTH_RATE_LIMIT_PER_MIN, ttl: 60_000 } })
   async register(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
-    const { username, password } = parse(registerSchema, body);
+    const { username, password, inviteCode } = parse(registerSchema, body);
+    const codes = env.BETA_INVITE_CODES.split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+    if (codes.length && !codes.includes((inviteCode ?? '').toLowerCase())) {
+      throw new ForbiddenException('Registration is invite-only during the closed beta. Enter your invite code.');
+    }
     const user = await this.auth.register(username, password);
     this.setCookie(res, this.tokens.sign(user));
     return { user };
@@ -47,7 +52,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: env.AUTH_RATE_LIMIT_PER_MIN, ttl: 60_000 } })
   async login(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
     const { username, password } = parse(loginSchema, body);
     const user = await this.auth.login(username, password);

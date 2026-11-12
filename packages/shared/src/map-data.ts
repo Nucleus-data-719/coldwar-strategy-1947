@@ -151,17 +151,49 @@ export function seaRoute(from: string, to: string): SeaRoute | null {
     const prev = new Map<number, number>();
     const done = new Set<number>();
     const fc: Point = [f.center.x, f.center.y], tc: Point = [t.center.x, t.center.y];
-    for (const a of A) dist.set(a, dd(fc, SEA_DOTS[a]));
+    // Binary min-heap of [distance, dot]; stale entries are skipped when popped. This replaces a scan
+    // over every open dot per step, which made long sea routes slow on the 3,000-dot map.
+    const heap: [number, number][] = [];
+    const push = (d: number, k: number) => {
+      heap.push([d, k]);
+      for (let i = heap.length - 1; i > 0; ) {
+        const p = (i - 1) >> 1;
+        if (heap[p][0] <= heap[i][0]) break;
+        [heap[p], heap[i]] = [heap[i], heap[p]];
+        i = p;
+      }
+    };
+    const pop = (): [number, number] | undefined => {
+      const top = heap[0];
+      const last = heap.pop();
+      if (heap.length && last) {
+        heap[0] = last;
+        for (let i = 0; ; ) {
+          const l = 2 * i + 1, r = l + 1;
+          let m = i;
+          if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+          if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+          if (m === i) break;
+          [heap[m], heap[i]] = [heap[i], heap[m]];
+          i = m;
+        }
+      }
+      return top;
+    };
+    for (const a of A) {
+      const d = dd(fc, SEA_DOTS[a]);
+      dist.set(a, d);
+      push(d, a);
+    }
     let end = -1;
-    for (;;) {
-      let cur = -1, best = Infinity;
-      for (const [k, v] of dist) if (!done.has(k) && v < best) { best = v; cur = k; }
-      if (cur < 0) break;
+    for (let e = pop(); e; e = pop()) {
+      const [best, cur] = e;
+      if (done.has(cur)) continue;
       if (goal.has(cur)) { end = cur; break; }
       done.add(cur);
       for (const nb of seaAdj[cur]) {
         const c = best + dd(SEA_DOTS[cur], SEA_DOTS[nb]);
-        if (c < (dist.get(nb) ?? Infinity)) { dist.set(nb, c); prev.set(nb, cur); }
+        if (c < (dist.get(nb) ?? Infinity)) { dist.set(nb, c); prev.set(nb, cur); push(c, nb); }
       }
     }
     if (end >= 0) {

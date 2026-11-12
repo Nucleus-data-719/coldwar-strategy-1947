@@ -11,7 +11,7 @@ export const TERRAIN_MOVE_MULT: Record<Terrain, number> = {
   desert: 1.3,
 };
 
-/** A leg between two provinces that both have a completed railway takes this share of the time. */
+/** A leg between two provinces that both have a completed railway takes this share of the time; with one railway, halfway between this and 1. */
 export const RAILWAY_MOVE_MULT = 0.5;
 
 /** Highways (out of capitals) are quicker than ordinary roads; ferries are slow sea lanes. */
@@ -45,7 +45,8 @@ export function legSeconds(
   fromKey: string,
   toKey: string,
   speed: number,
-  railway: boolean,
+  /** 2 (or true) when both provinces have a railway, 1 when one does: each railway covers its own half of the leg. */
+  railway: boolean | number,
   gameSpeed: number,
   roadMult = 1,
   sea = false,
@@ -68,7 +69,9 @@ export function legSeconds(
     }
   }
   let hours = ((distance / MAP_UNITS_PER_PROVINCE) * TERRAIN_MOVE_MULT[b.terrain]) / speed;
-  if (railway) hours *= RAILWAY_MOVE_MULT;
+  const railEnds = railway === true ? 2 : railway === false ? 0 : railway;
+  if (railEnds >= 2) hours *= RAILWAY_MOVE_MULT;
+  else if (railEnds === 1) hours *= (1 + RAILWAY_MOVE_MULT) / 2;
   hours *= roadMult;
   return Math.max(1, Math.round((hours * 3600) / gameSpeed));
 }
@@ -117,7 +120,9 @@ export interface Route {
   totalSeconds: number;
 }
 
-const hasRail = (ctx: RouteContext, a: string, b: string) => ctx.railwayKeys.has(a) && ctx.railwayKeys.has(b);
+/** How many ends of a leg have a railway (0, 1 or 2). A railway lies inside its own province, so it speeds up only that half of the leg. */
+export const railEnds = (rails: ReadonlySet<string>, a: string, b: string) => (rails.has(a) ? 1 : 0) + (rails.has(b) ? 1 : 0);
+const hasRail = (ctx: RouteContext, a: string, b: string) => railEnds(ctx.railwayKeys, a, b);
 
 const canEnter = (ctx: RouteContext, key: string) =>
   relationOf(ctx.ownerByKey.get(key), ctx.countryId, ctx.atWarWith) !== 'blocked' &&
@@ -239,7 +244,7 @@ export function advanceMovement(i: AdvanceInput): AdvanceResult {
     location = next;
     if (path.length === 0) return { status: 'arrived', locationKey: location };
     next = path.shift()!;
-    const rail = i.railwayKeys.has(location) && i.railwayKeys.has(next);
+    const rail = railEnds(i.railwayKeys, location, next);
     const legArrives = arrivedAt + legSeconds(location, next, i.speed, rail, i.gameSpeed, roadMultFor(i.useRoads, location, next), i.coastalOnly) * 1000;
     if (legArrives > i.now) {
       return {

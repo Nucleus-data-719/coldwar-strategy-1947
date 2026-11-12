@@ -7,7 +7,6 @@ import {
   PROVINCES,
   RECRUIT_UNIT,
   STARTING_GARRISON,
-  STARTING_PROVINCE_GARRISON,
   STARTING_RESOURCES,
   addResources,
   scaleSeconds,
@@ -178,26 +177,19 @@ export class CampaignsService implements OnModuleInit {
             nextActionAt: new Date(now.getTime() + recruitMs),
           },
         );
+      }
+      // Every city (the capital too) starts with a garrison of 5 infantry. Rural provinces start empty.
+      const garrisonSize = new Map<string, number>();
+      for (const geo of PROVINCES) {
+        if (!geo.isCity && !geo.isCapital) continue;
+        const province = provinceByKey.get(geo.key)!;
+        garrisonSize.set(province.id, STARTING_GARRISON);
         formationValues.push({
           campaignId: campaign.id,
-          countryId: country.id,
+          countryId: countryByCode.get(geo.countryCode)!.id,
           provinceId: province.id,
           name: GARRISON_NAME,
         });
-      }
-      // Every other province gets a small garrison, so land has to be fought for.
-      const garrisonSize = new Map<string, number>();
-      for (const geo of PROVINCES) {
-        const province = provinceByKey.get(geo.key)!;
-        garrisonSize.set(province.id, geo.isCapital ? STARTING_GARRISON : STARTING_PROVINCE_GARRISON);
-        if (!geo.isCapital) {
-          formationValues.push({
-            campaignId: campaign.id,
-            countryId: countryByCode.get(geo.countryCode)!.id,
-            provinceId: province.id,
-            name: GARRISON_NAME,
-          });
-        }
       }
       await tx.insert(buildings).values(buildingValues);
       const formationRows = await tx.insert(formations).values(formationValues).returning();
@@ -286,19 +278,31 @@ export class CampaignsService implements OnModuleInit {
 
   async getState(userId: string, campaignId: string): Promise<GameState> {
     const player = await this.players.require(userId, campaignId);
-    const [campaign] = await this.db.select().from(campaigns).where(eq(campaigns.id, campaignId));
+    // Independent reads run together instead of one after another: the state call used to be a dozen
+    // round trips in a row, and each one costs a full network hop to the database.
+    const [[campaign], [user], countryRows, provRows, bldRows, unitRows, myFormations, leaders, resources] = await Promise.all([
+      this.db.select().from(campaigns).where(eq(campaigns.id, campaignId)),
+      this.db.select({ username: users.username }).from(users).where(eq(users.id, userId)),
+      this.db.select().from(countries).where(eq(countries.campaignId, campaignId)),
+      this.db.select().from(provinces).where(eq(provinces.campaignId, campaignId)),
+      this.db.select().from(buildings).where(eq(buildings.campaignId, campaignId)),
+      this.db
+        .select({ provinceId: formations.provinceId, count: formationUnits.count })
+        .from(formationUnits)
+        .innerJoin(formations, eq(formations.id, formationUnits.formationId))
+        // Armies on the move are drawn as markers, not counted in a province.
+        .where(and(eq(formations.campaignId, campaignId), isNull(formations.moveArrivesAt), isNull(formations.seaNode))),
+      this.db
+        .select()
+        .from(formations)
+        .where(and(eq(formations.campaignId, campaignId), eq(formations.countryId, player.countryId))),
+      this.db
+        .select({ f: generals.deployedFormationId, g: generals.generalId })
+        .from(generals)
+        .where(eq(generals.countryId, player.countryId)),
+      this.economy.getLive(player.countryId),
+    ]);
     if (!campaign) throw new NotFoundException('Campaign not found');
-    const [user] = await this.db.select({ username: users.username }).from(users).where(eq(users.id, userId));
-
-    const countryRows = await this.db.select().from(countries).where(eq(countries.campaignId, campaignId));
-    const provRows = await this.db.select().from(provinces).where(eq(provinces.campaignId, campaignId));
-    const bldRows = await this.db.select().from(buildings).where(eq(buildings.campaignId, campaignId));
-    const unitRows = await this.db
-      .select({ provinceId: formations.provinceId, count: formationUnits.count })
-      .from(formationUnits)
-      .innerJoin(formations, eq(formations.id, formationUnits.formationId))
-      // Armies on the move are drawn as markers, not counted in a province.
-      .where(and(eq(formations.campaignId, campaignId), isNull(formations.moveArrivesAt), isNull(formations.seaNode)));
 
     const keyById = new Map(provRows.map((p) => [p.id, p.key]));
     const countByOwner = new Map<string, number>();
@@ -331,10 +335,6 @@ export class CampaignsService implements OnModuleInit {
       unitCount: unitsByProvince.get(p.id) ?? 0,
     }));
 
-    const myFormations = await this.db
-      .select()
-      .from(formations)
-      .where(and(eq(formations.campaignId, campaignId), eq(formations.countryId, player.countryId)));
     const myUnits = myFormations.length
       ? await this.db
           .select()
@@ -354,14 +354,8 @@ export class CampaignsService implements OnModuleInit {
       ),
     );
 
-    const leaders = await this.db
-      .select({ f: generals.deployedFormationId, g: generals.generalId })
-      .from(generals)
-      .where(eq(generals.countryId, player.countryId));
     const generalOf = new Map(leaders.filter((l) => l.f).map((l) => [l.f as string, l.g]));
     for (const dto of myFormationDtos) dto.generalId = generalOf.get(dto.id) ?? null;
-
-    const resources = await this.economy.getLive(player.countryId);
 
     return {
       campaign: { id: campaign.id, name: campaign.name, startYear: campaign.startYear, gameSpeed: env.GAME_SPEED },

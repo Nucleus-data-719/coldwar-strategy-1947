@@ -31,6 +31,19 @@ const schema = z.object({
   AI_WAR_INTERVAL_SECONDS: z.coerce.number().positive().default(60),
   SCHEDULER_ENABLED: bool('true'),
   ALLOW_CAMPAIGN_CREATION: bool('true'),
+  // Closed beta: when set, registering needs one of these comma-separated codes.
+  BETA_INVITE_CODES: z.string().default(''),
+  // Secret for GET /api/metrics (send it in the x-admin-token header). Empty = metrics off.
+  ADMIN_TOKEN: z.string().default(''),
+  // Rate limits per client address per minute: all requests, and sign-in/registration. Raise both only for load tests.
+  RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(240),
+  AUTH_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(10),
+  SLOW_REQUEST_MS: z.coerce.number().int().positive().default(500),
+  // How many AI countries decide at the same time, and the most per tick.
+  AI_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(4),
+  AI_MAX_PER_TICK: z.coerce.number().int().min(1).default(40),
+  // Set to 1 when the server sits behind a proxy (Render, Railway, nginx) so rate limits see real client addresses.
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
 });
 
 const parsed = schema.safeParse(process.env);

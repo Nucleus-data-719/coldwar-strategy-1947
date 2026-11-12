@@ -325,3 +325,33 @@ export const PLAYABLE = [
     cities: [c('Maracaibo', -71.64, 10.65, 'o'), c('Maturin', -63.18, 9.75, 'o'), c('Maracay', -67.6, 10.25, 'e'), c('Valencia', -68.0, 10.18, 'f'), c('El Callao', -61.83, 7.35, 'r'), c('Ciudad Bolivar', -63.55, 8.12, 's')],
     deposits: [c('Cerro Bolivar Iron Mine', -63.5, 7.6, 's'), c('Guayana Forests', -64.0, 5.5, 'w')] },
 ];
+
+/**
+ * How many cities (the capital included) each playable country has on the map. Super and major countries 7,
+ * medium countries 6, small playable countries 3 to 5. Every other province is rural. Edit and re-run the generator.
+ */
+const SMALL_CITIES = { SWE: 4, NOR: 3, FIN: 3, ROU: 4, YUG: 4, CZE: 4, IRQ: 3, KOR: 4, CHL: 3, THA: 5, MMR: 4, PHL: 5, VNM: 4, VEN: 4 };
+export const cityTarget = (sp) => (sp.tier === 'super' || sp.tier === 'major' ? 7 : (SMALL_CITIES[sp.code] ?? 6));
+
+/** Hand-picked cities for the super and major countries (besides the capital), so the map keeps each country's real centres. */
+export const KEEP_CITIES = {
+  USA: ['New York', 'Chicago', 'Los Angeles', 'Detroit', 'Denver', 'Portland'],
+  SOV: ['Leningrad', 'Kiev', 'Baku', 'Novosibirsk', 'Vladivostok', 'Murmansk'],
+  CHN: ['Shanghai', 'Beijing', 'Wuhan', 'Canton', 'Lanzhou', 'Kunming'],
+  IND: ['Bombay', 'Calcutta', 'Madras', 'Hyderabad', 'Digboi', 'Trivandrum'],
+  BRA: ['Sao Paulo', 'Salvador', 'Recife', 'Belem', 'Porto Alegre', 'Belo Horizonte'],
+  FRA: ['Lyon', 'Marseille', 'Bordeaux', 'Lille', 'Strasbourg', 'Noumea'],
+  GER: ['Hamburg', 'Munich', 'Cologne', 'Essen', 'Leipzig', 'Hanover'],
+  CAN: ['Toronto', 'Montreal', 'Vancouver', 'Edmonton', 'Sudbury', 'Winnipeg'],
+  AUS: ['Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Roma', 'Hobart'],
+  ARG: ['Cordoba', 'Rosario', 'Mendoza', 'Tucuman', 'Bahia Blanca', 'Ushuaia'],
+  MEX: ['Guadalajara', 'Monterrey', 'Tampico', 'Zacatecas', 'Merida', 'Tijuana'],
+  IDN: ['Surabaya', 'Medan', 'Palembang', 'Balikpapan', 'Pontianak', 'Makassar'],
+  GBR: ['Birmingham', 'Manchester', 'Liverpool', 'Glasgow', 'Grangemouth', 'Camborne'],
+  JPN: ['Osaka', 'Nagoya', 'Yawata', 'Hiroshima', 'Sapporo', 'Niigata'],
+  // small playable countries: only where the automatic pick would drop a famous place
+  ROU: ['Ploiesti', 'Hunedoara', 'Baia Mare'],
+  SWE: ['Gothenburg', 'Boliden', 'Kvarntorp'],
+  IRQ: ['Basra', 'Zakho'],
+  TUR: ['Istanbul', 'Izmir', 'Karabuk', 'Samsun', 'Batman', 'Adana'],
+};

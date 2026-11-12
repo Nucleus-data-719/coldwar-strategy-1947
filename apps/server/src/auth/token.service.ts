@@ -20,7 +20,7 @@ export class TokenService {
 
   verify(token: string): TokenPayload | null {
     try {
-      const payload = jwt.verify(token, env.JWT_SECRET) as TokenPayload;
+      const payload = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }) as TokenPayload;
       return typeof payload.sub === 'string' ? payload : null;
     } catch {
       return null;

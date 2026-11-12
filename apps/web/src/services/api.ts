@@ -56,8 +56,8 @@ export const api = {
       throw e;
     }
   },
-  register: (username: string, password: string) =>
-    post<{ user: PublicUser }>('/auth/register', { username, password }),
+  register: (username: string, password: string, inviteCode?: string) =>
+    post<{ user: PublicUser }>('/auth/register', { username, password, inviteCode: inviteCode || undefined }),
   login: (username: string, password: string) => post<{ user: PublicUser }>('/auth/login', { username, password }),
   logout: () => post<{ ok: true }>('/auth/logout'),
 

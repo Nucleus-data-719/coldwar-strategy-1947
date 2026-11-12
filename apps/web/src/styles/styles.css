@@ -484,3 +484,12 @@ button.ghost.off { opacity: 0.5; }
 .dialog-head h2 { margin: 0; font-size: 16px; letter-spacing: .06em; }
 .dialog-body { padding: 14px; }
 .dialog-slider { width: 100%; }
+
+/* Map depth: a soft dark vignette around the edges, like the table-top view of a strategy game. */
+.map-host::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, transparent 58%, rgba(2, 6, 10, 0.6) 100%);
+}
