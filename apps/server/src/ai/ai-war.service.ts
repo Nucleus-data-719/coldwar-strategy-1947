@@ -37,7 +37,8 @@ export class AiWarService {
     const enemies = await this.wars.enemiesOf(tx, country.id);
     if (enemies.size === 0) return { balance, acted: false, atWar: false };
 
-    const provs = await tx.select().from(provinces).where(eq(provinces.campaignId, country.campaignId));
+    // only id, key and owner: the full rows (production, terrain, names) are many times larger
+    const provs = await tx.select({ id: provinces.id, key: provinces.key, ownerCountryId: provinces.ownerCountryId }).from(provinces).where(eq(provinces.campaignId, country.campaignId));
     const keyById = new Map(provs.map((p) => [p.id, p.key]));
     const idByKey = new Map(provs.map((p) => [p.key, p.id]));
     const ownerByKey = new Map(provs.map((p) => [p.key, p.ownerCountryId]));

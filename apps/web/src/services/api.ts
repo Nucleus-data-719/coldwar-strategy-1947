@@ -78,11 +78,15 @@ export const api = {
     provinceId: string,
     units?: Partial<Record<UnitType, number>>,
     waypoint?: boolean,
+    point?: { x: number; y: number } | null,
+    declareWar?: boolean,
   ) =>
     post<{ ok: true; formationId: string; etaSeconds: number }>(
       `/campaigns/${campaignId}/formations/${formationId}/move`,
-      { provinceId, units, waypoint },
+      { provinceId, units, waypoint, point: point ?? undefined, declareWar: declareWar || undefined },
     ),
+  assignFront: (campaignId: string, formationId: string, countryId: string | null) =>
+    post<{ ok: true; assigned: number; provinces: string[] }>(`/campaigns/${campaignId}/formations/${formationId}/front`, { countryId }),
   delayFormation: (campaignId: string, formationId: string, hours: number) =>
     post<{ ok: true }>(`/campaigns/${campaignId}/formations/${formationId}/delay`, { hours }),
   patrolFormation: (

@@ -53,13 +53,15 @@ export class AiForcesService {
     if (enemies.size === 0) return { balance, acted: false };
     let acted = false;
 
-    const provs = await tx.select().from(provinces).where(eq(provinces.campaignId, country.campaignId));
+    // only id, key and owner: the full rows (production, terrain, names) are many times larger
+    const provs = await tx.select({ id: provinces.id, key: provinces.key, ownerCountryId: provinces.ownerCountryId }).from(provinces).where(eq(provinces.campaignId, country.campaignId));
     const keyById = new Map(provs.map((p) => [p.id, p.key]));
     const idByKey = new Map(provs.map((p) => [p.key, p.id]));
     const owned = provs.filter((p) => p.ownerCountryId === country.id);
     const enemyProvinceKeys = new Set(provs.filter((p) => enemies.has(p.ownerCountryId)).map((p) => p.key));
 
-    const forms = await tx.select().from(formations).where(eq(formations.campaignId, country.campaignId));
+    // this country's armies and its enemies' (not every army in the world)
+    const forms = await tx.select().from(formations).where(and(eq(formations.campaignId, country.campaignId), inArray(formations.countryId, [country.id, ...enemies])));
     const unitRows = forms.length ? await tx.select().from(formationUnits).where(inArray(formationUnits.formationId, forms.map((f) => f.id))) : [];
     const unitsOf = (id: string): StackUnit[] => unitRows.filter((u) => u.formationId === id).map((u) => ({ unitType: u.unitType, count: u.count }));
     const mine = forms.filter((f) => f.countryId === country.id);

@@ -1,5 +1,5 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
-import { and, eq, inArray, isNull, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import {
   BUILDINGS,
   COUNTRIES,
@@ -58,6 +58,13 @@ function isUniqueViolation(err: unknown): boolean {
   return e?.code === '23505' || e?.cause?.code === '23505';
 }
 
+interface WorldSnapshot {
+  countryRows: (typeof countries.$inferSelect)[];
+  provRows: { id: string; key: string; ownerCountryId: string }[];
+  bldRows: (typeof buildings.$inferSelect)[];
+  unitRows: { provinceId: string; count: number }[];
+}
+
 @Injectable()
 export class CampaignsService implements OnModuleInit {
   private readonly log = new Logger(CampaignsService.name);
@@ -70,7 +77,44 @@ export class CampaignsService implements OnModuleInit {
     private readonly wars: WarsService,
     private readonly production: ProductionService,
     private readonly naval: NavalService,
-  ) {}
+  ) {
+    // Changes to ownership, buildings or stationary armies drop the shared snapshot; army marches do not (the cache window covers them).
+    this.realtime.onUpdate((campaignId, payload) => {
+      const kind = String(payload.kind ?? '');
+      if (kind !== 'move' && kind !== 'army' && kind !== 'generals' && kind !== 'research') this.worldCache.delete(campaignId);
+    });
+  }
+
+  /**
+   * What every player of a campaign sees the same: country list, province owners, buildings and army counts. It is
+   * the biggest part of the state, so it is read once and shared for a few seconds instead of once per request.
+   */
+  private worldCache = new Map<string, { at: number; data: Promise<WorldSnapshot> }>();
+  private world(campaignId: string): Promise<WorldSnapshot> {
+    const hit = this.worldCache.get(campaignId);
+    if (hit && Date.now() - hit.at < env.WORLD_CACHE_MS) return hit.data;
+    const data = this.loadWorld(campaignId);
+    this.worldCache.set(campaignId, { at: Date.now(), data });
+    data.catch(() => this.worldCache.delete(campaignId));
+    return data;
+  }
+
+  private async loadWorld(campaignId: string): Promise<WorldSnapshot> {
+    const [countryRows, provRows, bldRows, unitRows] = await Promise.all([
+      this.db.select().from(countries).where(eq(countries.campaignId, campaignId)),
+      // only the three columns the map needs: the rest of a province row (production, terrain, names) is large
+      this.db.select({ id: provinces.id, key: provinces.key, ownerCountryId: provinces.ownerCountryId }).from(provinces).where(eq(provinces.campaignId, campaignId)),
+      this.db.select().from(buildings).where(eq(buildings.campaignId, campaignId)),
+      // summed in the database: one small row per province instead of one per unit stack
+      this.db
+        .select({ provinceId: formations.provinceId, count: sql<number>`sum(${formationUnits.count})::int` })
+        .from(formationUnits)
+        .innerJoin(formations, eq(formations.id, formationUnits.formationId))
+        .where(and(eq(formations.campaignId, campaignId), isNull(formations.moveArrivesAt), isNull(formations.seaNode)))
+        .groupBy(formations.provinceId),
+    ]);
+    return { countryRows, provRows, bldRows, unitRows };
+  }
 
   /** Campaigns made on an older map (any province key that no longer exists) cannot be played any more. */
   private legacyCache: Set<string> | null = null;
@@ -280,18 +324,10 @@ export class CampaignsService implements OnModuleInit {
     const player = await this.players.require(userId, campaignId);
     // Independent reads run together instead of one after another: the state call used to be a dozen
     // round trips in a row, and each one costs a full network hop to the database.
-    const [[campaign], [user], countryRows, provRows, bldRows, unitRows, myFormations, leaders, resources] = await Promise.all([
+    const [[campaign], [user], world, myFormations, leaders, resources] = await Promise.all([
       this.db.select().from(campaigns).where(eq(campaigns.id, campaignId)),
       this.db.select({ username: users.username }).from(users).where(eq(users.id, userId)),
-      this.db.select().from(countries).where(eq(countries.campaignId, campaignId)),
-      this.db.select().from(provinces).where(eq(provinces.campaignId, campaignId)),
-      this.db.select().from(buildings).where(eq(buildings.campaignId, campaignId)),
-      this.db
-        .select({ provinceId: formations.provinceId, count: formationUnits.count })
-        .from(formationUnits)
-        .innerJoin(formations, eq(formations.id, formationUnits.formationId))
-        // Armies on the move are drawn as markers, not counted in a province.
-        .where(and(eq(formations.campaignId, campaignId), isNull(formations.moveArrivesAt), isNull(formations.seaNode))),
+      this.world(campaignId),
       this.db
         .select()
         .from(formations)
@@ -303,6 +339,7 @@ export class CampaignsService implements OnModuleInit {
       this.economy.getLive(player.countryId),
     ]);
     if (!campaign) throw new NotFoundException('Campaign not found');
+    const { countryRows, provRows, bldRows, unitRows } = world;
 
     const keyById = new Map(provRows.map((p) => [p.id, p.key]));
     const countByOwner = new Map<string, number>();

@@ -17,6 +17,8 @@ import { NotificationsPanel, useUnreadCount } from '../features/economy/Notifica
 import { ArmyBar, type OrderKind } from '../features/military/ArmyBar';
 import { ArmiesPanel } from '../features/military/ArmiesPanel';
 import { MovePanel } from '../features/military/MovePanel';
+import { SplitPanel } from '../features/military/SplitPanel';
+import { FrontPanel } from '../features/military/FrontPanel';
 import { NavalPanel } from '../features/military/NavalPanel';
 import { BattlesPanel } from '../features/military/BattlesPanel';
 import { FeedbackButton } from '../features/feedback/FeedbackButton';
@@ -94,6 +96,11 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
   // Move mode: pick an army, then click a destination on the map.
   const [moveFormationId, setMoveFormationId] = useState<string | null>(null);
   const [dest, setDest] = useState<string | null>(null);
+  const [destPoint, setDestPoint] = useState<{ x: number; y: number } | null>(null);
+  const [previewMeta, setPreviewMeta] = useState<{ point: { x: number; y: number } | null; hostile: boolean }>({ point: null, hostile: false });
+  const [splitId, setSplitId] = useState<string | null>(null);
+  const [frontId, setFrontId] = useState<string | null>(null);
+  const [frontTarget, setFrontTarget] = useState<string | null>(null);
   const [previewPath, setPreviewPath] = useState<string[] | null>(null);
   const [previewPatrol, setPreviewPatrol] = useState<{ key: string; radius: number } | null>(null);
   // Naval orders: the order panel for ships, an open-sea dot, an enemy fleet, and the planned sea route.
@@ -125,7 +132,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
         qc.invalidateQueries({ queryKey: ['wars', campaignId] });
         qc.invalidateQueries({ queryKey: ['generals', campaignId] });
         qc.invalidateQueries({ queryKey: ['diplomacy', campaignId] });
-      }, 1500);
+      }, 2500);
     };
     const onNotification = (n?: { type?: string }) => {
       qc.invalidateQueries({ queryKey: ['notifications', campaignId] });
@@ -156,7 +163,9 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
   const moveFormation = state?.formations.find((f) => f.id === moveFormationId) ?? null;
   const selectedArmy = state?.formations.find((f) => f.id === armyId) ?? null;
   // With an army selected the side panel shows only that army, like the army screen in Supremacy.
-  const armyMode = !!(moveFormation || selectedArmy);
+  const splitFormation = state?.formations.find((f) => f.id === splitId) ?? null;
+  const frontFormation = state?.formations.find((f) => f.id === frontId) ?? null;
+  const armyMode = !!(moveFormation || selectedArmy || splitFormation || frontFormation);
 
   const hasShips = (f?: FormationDto | null) => !!f && f.units.some((u) => UNITS[u.unitType].category === 'naval');
   const navalFirst = (f?: FormationDto | null) => !!f && hasShips(f) && (!!f.sea || f.units.every((u) => UNITS[u.unitType].category === 'naval'));
@@ -172,23 +181,57 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
     setDrawerTab('province');
     setMoveFormationId(formationId);
     setArmyId(formationId);
+    setSplitId(null);
+    setFrontId(null);
+    setFrontTarget(null);
     setDest(null);
+    setDestPoint(null);
     setPreviewPath(null);
+  };
+  const startSplit = (formationId: string) => {
+    cancelMove();
+    setFrontId(null);
+    setFrontTarget(null);
+    setTab('world');
+    setDrawerOpen(true);
+    setSplitId(formationId);
+    setArmyId(formationId);
+  };
+  const startFront = (formationId: string) => {
+    cancelMove();
+    setSplitId(null);
+    setTab('world');
+    setDrawerOpen(true);
+    setFrontTarget(null);
+    setFrontId(formationId);
+    setArmyId(formationId);
   };
   const cancelMove = () => {
     setSeaDest(null);
     setEnemyTarget(null);
     setPreviewSea(null);
     setMoveFormationId(null);
+    setSplitId(null);
+    setFrontId(null);
+    setFrontTarget(null);
     setDest(null);
+    setDestPoint(null);
     setPreviewPath(null);
+    setPreviewMeta({ point: null, hostile: false });
   };
 
   // In move mode a map click chooses the destination instead of selecting a province.
-  const handleMapSelect = (key: string | null) => {
+  const handleMapSelect = (key: string | null, point?: { x: number; y: number }) => {
+    if (frontFormation) {
+      const owner = key ? state?.provinces.find((p) => p.key === key)?.ownerCountryId : null;
+      if (owner && owner !== state?.me.countryId) setFrontTarget(owner);
+      return;
+    }
+    if (splitFormation) return;
     if (moveFormation) {
       if (key) {
         setDest(key);
+        setDestPoint(point ?? null);
         setSeaDest(null);
         setEnemyTarget(null);
       }
@@ -212,7 +255,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
     setDrawerTab('province');
   };
   // Right-click: order the selected army to that province (shows the route to confirm).
-  const orderArmy = (key: string) => {
+  const orderArmy = (key: string, point?: { x: number; y: number }) => {
     const id = moveFormationId ?? armyId;
     if (!id) return;
     const f0 = state?.formations.find((x) => x.id === id);
@@ -228,7 +271,11 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
     setDrawerTab('province');
     setMoveFormationId(id);
     setArmyId(id);
+    setSplitId(null);
+    setFrontId(null);
+    setFrontTarget(null);
     setDest(key);
+    setDestPoint(point ?? null);
     setPreviewPath(null);
   };
 
@@ -375,6 +422,10 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                 mode={mapMode}
                 atWarWith={state.atWarWith}
                 selectedKey={moveFormation ? dest : selected}
+                previewPoint={previewMeta.point}
+                previewHostile={previewMeta.hostile}
+                frontTarget={frontFormation ? frontTarget : undefined}
+                onFrontHover={(id) => { if (id && id !== state.me.countryId) setFrontTarget(id); }}
                 onSelect={handleMapSelect}
                 formations={state.formations}
                 clockOffsetMs={clockOffsetMs}
@@ -423,9 +474,13 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                   <Icon name="province" size={18} /> Details
                 </button>
               )}
-              <div className={moveFormation ? 'map-hint small move' : 'map-hint muted small'}>
-                {moveFormation
-                  ? 'Click the destination province'
+              <div className={moveFormation || frontFormation || splitFormation ? 'map-hint small move' : 'map-hint muted small'}>
+                {frontFormation
+                  ? 'Hover a border and click the country whose front the army should hold'
+                  : splitFormation
+                    ? 'Choose the units to split off'
+                    : moveFormation
+                  ? 'Click anywhere on the map to set the destination'
                   : 'Drag to pan · scroll to zoom · click a province or an army · right-click to order'}
               </div>
             </div>
@@ -437,13 +492,15 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                 formation={selectedArmy}
                 active={moveFormation ? { kind: orderKind, naval: navalMode } : null}
                 onOrder={(kind, naval) => startMove(selectedArmy.id, naval, kind)}
+                onSplit={() => startSplit(selectedArmy.id)}
+                onFront={() => startFront(selectedArmy.id)}
                 onClose={() => {
                   cancelMove();
                   setArmyId(null);
                 }}
               />
             )}
-            {drawerOpen && !(selectedArmy && !moveFormation) && (
+            {drawerOpen && !(selectedArmy && !moveFormation && !splitFormation && !frontFormation) && (
               <aside className="drawer" aria-label="Details">
                 <div className="drawer-head">
                   {armyMode ? (
@@ -480,7 +537,28 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                 </div>
                 <div className="drawer-body">
                   {(armyMode || drawerTab === 'province') &&
-                    (moveFormation && navalMode ? (
+                    (splitFormation ? (
+                      <SplitPanel
+                        key={splitFormation.id}
+                        campaignId={campaignId}
+                        formation={splitFormation}
+                        onClose={cancelMove}
+                        onDone={(id) => {
+                          cancelMove();
+                          setArmyId(id);
+                        }}
+                      />
+                    ) : frontFormation ? (
+                      <FrontPanel
+                        key={frontFormation.id}
+                        campaignId={campaignId}
+                        state={state}
+                        formation={frontFormation}
+                        target={frontTarget}
+                        onTarget={setFrontTarget}
+                        onClose={cancelMove}
+                      />
+                    ) : moveFormation && navalMode ? (
                       <NavalPanel
                         key={moveFormation.id}
                         campaignId={campaignId}
@@ -499,8 +577,10 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                         state={state}
                         formation={moveFormation}
                         dest={dest}
+                        destPoint={destPoint}
                         kind={orderKind}
                         onPreview={setPreviewPath}
+                        onPreviewMeta={setPreviewMeta}
                         onPatrolPreview={setPreviewPatrol}
                         onClose={cancelMove}
                       />

@@ -21,6 +21,7 @@ import { DiplomacyService } from '../diplomacy/diplomacy.service';
 import { ResearchService } from '../research/research.service';
 import { CapitalService } from '../capital/capital.service';
 import { FormationsService } from '../military/formations.service';
+import { FrontService } from '../military/front.service';
 import { ProductionService } from '../production/production.service';
 import { CombatService } from '../military/combat.service';
 import { MovementService } from '../military/movement.service';
@@ -67,11 +68,16 @@ const navalAttackSchema = z.object({
   targetId: z.string().uuid(),
   units: z.record(z.enum(UNIT_TYPES), z.number().int().min(0).max(100000)).optional(),
 });
+const frontSchema = z.object({ countryId: z.string().uuid().nullable() });
 const delaySchema = z.object({ hours: z.number().min(0).max(24) });
 const moveSchema = z.object({
   provinceId: z.string().uuid(),
   // Add the province to the end of the route the army already has.
   waypoint: z.boolean().optional(),
+  // A spot inside the destination province for the army to stand on.
+  point: z.object({ x: z.number().min(0).max(5000), y: z.number().min(0).max(3000) }).optional(),
+  // Declare war first if the destination belongs to a country you are not at war with.
+  declareWar: z.boolean().optional(),
   // Optional: send only some units, as a new task force.
   units: z.record(z.enum(UNIT_TYPES), z.number().int().min(0).max(100000)).optional(),
 });
@@ -90,6 +96,7 @@ export class CampaignsController {
     private readonly combat: CombatService,
     private readonly production: ProductionService,
     private readonly formationsService: FormationsService,
+    private readonly front: FrontService,
     private readonly capital: CapitalService,
     private readonly researchService: ResearchService,
     private readonly generalsService: GeneralsService,
@@ -155,8 +162,8 @@ export class CampaignsController {
     @Param('formationId', ParseUUIDPipe) formationId: string,
     @Body() body: unknown,
   ) {
-    const { provinceId, units, waypoint } = parse(moveSchema, body);
-    return this.movement.order(user.id, id, formationId, provinceId, units, waypoint);
+    const { provinceId, units, waypoint, point, declareWar } = parse(moveSchema, body);
+    return this.movement.order(user.id, id, formationId, provinceId, units, waypoint, point, declareWar);
   }
 
   @Post(':id/formations/:formationId/delay')
@@ -271,6 +278,18 @@ export class CampaignsController {
   ) {
     const { units } = parse(splitSchema, body);
     return this.formationsService.split(user.id, id, formationId, units);
+  }
+
+  @Post(':id/formations/:formationId/front')
+  @HttpCode(200)
+  assignFront(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('formationId', ParseUUIDPipe) formationId: string,
+    @Body() body: unknown,
+  ) {
+    const { countryId } = parse(frontSchema, body);
+    return this.front.assign(user.id, id, formationId, countryId);
   }
 
   @Post(':id/capital')

@@ -18,3 +18,4 @@ export * from './patrol';
 export * from './naval';
 export * from './ai-forces';
 export * from './ai-war';
+export * from './armies';

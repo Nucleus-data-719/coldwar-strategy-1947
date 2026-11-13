@@ -165,6 +165,10 @@ export interface FormationDto {
   generalId?: string | null;
   /** Set while the fleet is at sea (not in a port). */
   sea?: SeaPositionDto | null;
+  /** The spot inside the province where the army was told to stand, if any. */
+  rest?: { x: number; y: number } | null;
+  /** Set when the army holds the front against this country. */
+  frontCountryId?: string | null;
 }
 
 /** A fleet at sea. `node` is the dot it is at (or left from, on a voyage). */

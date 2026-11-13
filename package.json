@@ -10,6 +10,8 @@
     "build:shared": "npm run build -w @cw/shared",
     "dev": "npm run build:shared && concurrently -n shared,server,web -c gray,blue,green \"npm run dev -w @cw/shared\" \"npm run start:dev -w @cw/server\" \"npm run dev -w @cw/web\"",
     "build": "npm run build:shared && npm run build -w @cw/server && npm run build -w @cw/web",
+    "build:deploy": "npm run build:shared && npm run build -w @cw/server && npm run build:prod -w @cw/web",
+    "start:deploy": "npm run db:push -w @cw/server -- --force && node apps/server/dist/main.js",
     "start": "npm run start -w @cw/server",
     "db:push": "npm run db:push -w @cw/server",
     "db:studio": "npm run db:studio -w @cw/server",

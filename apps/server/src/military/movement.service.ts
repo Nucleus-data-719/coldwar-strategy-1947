@@ -32,6 +32,7 @@ import { PlayersService } from '../players/players.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { WarsService } from '../wars/wars.service';
 import { CombatService } from './combat.service';
+import { mergeIdleAt } from './merge';
 
 /** Land forces move along roads; ships and aircraft are not bound to them. */
 const usesRoads = (units: { unitType: UnitType; count: number }[]) => !isNavalFormation(units) && canOccupyLand(units);
@@ -133,11 +134,24 @@ export class MovementService {
     destinationProvinceId: string,
     send?: Partial<Record<UnitType, number>>,
     waypoint = false,
+    point?: { x: number; y: number } | null,
+    declareWar = false,
   ) {
     const player = await this.players.require(userId, campaignId);
 
+    if (declareWar) {
+      // An order into the land of a country you are not at war with declares war on it first, as in Conflict of Nations.
+      const [dest] = await this.db
+        .select({ owner: provinces.ownerCountryId })
+        .from(provinces)
+        .where(and(eq(provinces.id, destinationProvinceId), eq(provinces.campaignId, campaignId)));
+      if (dest && dest.owner !== player.countryId && !(await this.wars.enemiesOf(this.db, player.countryId)).has(dest.owner)) {
+        await this.wars.declare(userId, campaignId, dest.owner);
+      }
+    }
+
     const result = await this.economy.lock(player.countryId, (tx, country) =>
-      this.orderFor(tx, country, campaignId, formationId, destinationProvinceId, send, waypoint),
+      this.orderFor(tx, country, campaignId, formationId, destinationProvinceId, send, waypoint, point ?? null),
     );
 
     this.realtime.campaignUpdate(campaignId, { kind: 'move' });
@@ -153,6 +167,8 @@ export class MovementService {
     destinationProvinceId: string,
     send?: Partial<Record<UnitType, number>>,
     waypoint = false,
+    point: { x: number; y: number } | null = null,
+    front: string | null = null,
   ): Promise<{ formationId: string; etaSeconds: number }> {
     const [formation] = await tx
       .select()
@@ -181,7 +197,12 @@ export class MovementService {
     // A waypoint is added at the end of the route the army already has; a normal order replaces what follows the current leg.
     const startId = moving ? (waypoint ? (target.movePath.at(-1) ?? target.moveNextProvinceId!) : target.moveNextProvinceId!) : target.provinceId;
     const startKey = ctx.keyById.get(startId)!;
-    if (!moving && startKey === destKey) throw new BadRequestException('The army is already in that province');
+    if (!moving && startKey === destKey) {
+      // Same province: with a spot chosen the army just takes up position there.
+      if (!point) throw new BadRequestException('The army is already in that province');
+      await tx.update(formations).set({ restX: point.x, restY: point.y, frontCountryId: front }).where(eq(formations.id, target.id));
+      return { formationId: target.id, etaSeconds: 0 };
+    }
 
     const route = planRoute(startKey, destKey, {
       countryId: country.id,
@@ -205,7 +226,7 @@ export class MovementService {
     if (moving) {
       await tx
         .update(formations)
-        .set({ movePath: waypoint ? [...target.movePath, ...ids.slice(1)] : ids.slice(1), movePatrol: false })
+        .set({ movePath: waypoint ? [...target.movePath, ...ids.slice(1)] : ids.slice(1), movePatrol: false, restX: point?.x ?? null, restY: point?.y ?? null, frontCountryId: front })
         .where(eq(formations.id, target.id));
     } else {
       const now = new Date();
@@ -220,6 +241,9 @@ export class MovementService {
           patrolActive: false,
           patrolSince: null,
           patrolSettledAt: null,
+          restX: point?.x ?? null,
+          restY: point?.y ?? null,
+          frontCountryId: front,
         })
         .where(eq(formations.id, target.id));
     }
@@ -529,6 +553,7 @@ export class MovementService {
     }
 
     await tx.update(formations).set({ provinceId: location, ...clear }).where(eq(formations.id, f.id));
+    if (!attacker.aiControlled) await mergeIdleAt(tx, f.id); // players' armies in one place join up; the AI keeps its own bookkeeping
     if (result.status === 'arrived' && fought) return notes; // the capture message already says it
     notes.push(
       await this.notifications.add(tx, {

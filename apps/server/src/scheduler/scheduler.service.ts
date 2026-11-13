@@ -27,6 +27,7 @@ import { ResearchService } from '../research/research.service';
 import { CapitalService } from '../capital/capital.service';
 import { ProductionService } from '../production/production.service';
 import { MovementService } from '../military/movement.service';
+import { FrontService } from '../military/front.service';
 import { PatrolService } from '../military/patrol.service';
 import { NavalService } from '../military/naval.service';
 import { EconomyService } from '../economy/economy.service';
@@ -43,6 +44,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(SchedulerService.name);
   private timer?: NodeJS.Timeout;
   private running = false;
+  private lastTickAt = 0;
 
   constructor(
     @Inject(DB) private readonly db: Db,
@@ -51,6 +53,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     private readonly realtime: RealtimeService,
     private readonly ai: AiService,
     private readonly movement: MovementService,
+    private readonly fronts: FrontService,
     private readonly patrols: PatrolService,
     private readonly naval: NavalService,
     private readonly production: ProductionService,
@@ -64,7 +67,14 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       this.log.warn('Scheduler disabled (SCHEDULER_ENABLED=false)');
       return;
     }
-    this.timer = setInterval(() => void this.tick(), env.TICK_MS);
+    // Wakes every TICK_MS but only does the work that often while someone is connected; with nobody on, it runs every IDLE_TICK_MS.
+    // This keeps an idle test server from reading the database all night.
+    this.timer = setInterval(() => {
+      const gap = this.realtime.hasClients() ? env.TICK_MS : env.IDLE_TICK_MS;
+      if (Date.now() - this.lastTickAt < gap - 250) return;
+      this.lastTickAt = Date.now();
+      void this.tick();
+    }, env.TICK_MS);
     this.log.log(`Scheduler started (every ${env.TICK_MS} ms)`);
   }
 
@@ -78,6 +88,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.completeBuildings();
       await this.movement.processDue();
+      await this.fronts.processDue();
       await this.patrols.processDue();
       await this.naval.processDue();
       await this.endDisruptions();

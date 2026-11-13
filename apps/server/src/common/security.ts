@@ -3,16 +3,20 @@ import type { NextFunction, Request, Response } from 'express';
 import { env } from '../config/env';
 
 /** Security headers (the useful subset of what helmet sets; this is a JSON API, so the policy is strict). */
-export function securityHeaders(_req: Request, res: Response, next: NextFunction) {
+export function securityHeaders(req: Request, res: Response, next: NextFunction) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
-  res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
   res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
   res.removeHeader('X-Powered-By');
   if (env.NODE_ENV === 'production') res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
-  res.setHeader('Cache-Control', 'no-store');
+  if (env.NOINDEX) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  if (req.path.startsWith('/api')) {
+    // API answers: strict policy, never cached. (The web app's own pages and scripts get normal caching from the static handler.)
+    res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+    res.setHeader('Cache-Control', 'no-store');
+  }
   next();
 }
 

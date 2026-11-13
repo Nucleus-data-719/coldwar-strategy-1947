@@ -8,6 +8,7 @@ import {
   formationSpeed,
   isAirFormation,
   isNavalFormation,
+  restPoint,
   patrolDistance,
   patrolFlightSeconds,
   patrolRadius,
@@ -26,8 +27,12 @@ interface Props {
   formation: FormationDto;
   /** Destination chosen by clicking the map. */
   dest: string | null;
+  /** The exact spot clicked inside the destination province. */
+  destPoint?: { x: number; y: number } | null;
   /** Lets the map draw the previewed route. */
   onPreview: (path: string[] | null) => void;
+  /** Lets the map put the arrow tip on the chosen spot and colour it red for an attack. */
+  onPreviewMeta?: (meta: { point: { x: number; y: number } | null; hostile: boolean }) => void;
   /** Which order button was pressed: a plain move, an attack, or an extra stop after the current route. */
   kind?: 'move' | 'attack' | 'waypoint';
   /** Lets the map draw the circle of a patrol being planned. */
@@ -35,7 +40,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function MovePanel({ campaignId, state, formation, dest, kind = 'move', onPreview, onPatrolPreview, onClose }: Props) {
+export function MovePanel({ campaignId, state, formation, dest, destPoint = null, kind = 'move', onPreview, onPreviewMeta, onPatrolPreview, onClose }: Props) {
   const qc = useQueryClient();
   const now = useNow(1000);
   const [error, setError] = useState<string | null>(null);
@@ -78,13 +83,19 @@ export function MovePanel({ campaignId, state, formation, dest, kind = 'move', o
   const tooFar = patrolling && flightDistance > PATROL_MAX_FLIGHT;
   const flightSeconds = dest && speed > 0 ? patrolFlightSeconds(startKey, dest, speed, state.campaign.gameSpeed) : 0;
 
+  // Ordering troops into a country you are not at war with declares war on it, shown in red before you confirm.
+  const destOwner = dest ? ownerByKey.get(dest) : undefined;
+  const warTarget = !patrolling && destOwner && destOwner !== state.me.countryId && !state.atWarWith.includes(destOwner) ? destOwner : null;
+  const warTargetName = warTarget ? (state.countries.find((c) => c.id === warTarget)?.name ?? 'that country') : '';
+  const sameProvincePoint = !patrolling && !moving && !!dest && dest === startKey && !!restPoint(dest, destPoint?.x, destPoint?.y);
+
   const route = useMemo(
     () =>
-      dest && speed > 0 && !patrolling
+      dest && speed > 0 && !patrolling && !(dest === startKey && !moving)
         ? planRoute(startKey, dest, {
             countryId: state.me.countryId,
             ownerByKey,
-            atWarWith: new Set(state.atWarWith),
+            atWarWith: new Set(warTarget ? [...state.atWarWith, warTarget] : state.atWarWith),
             railwayKeys,
             speed,
             gameSpeed: state.campaign.gameSpeed,
@@ -93,19 +104,23 @@ export function MovePanel({ campaignId, state, formation, dest, kind = 'move', o
           })
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dest, startKey, speed, ownerByKey, state.atWarWith, railwayKeys, state.me.countryId, state.campaign.gameSpeed, patrolling],
+    [dest, startKey, speed, ownerByKey, state.atWarWith, railwayKeys, state.me.countryId, state.campaign.gameSpeed, patrolling, warTarget],
   );
 
-  const previewKey = patrolling ? (dest && dest !== startKey ? `${startKey}>${dest}` : '') : route ? route.path.join('>') : '';
+  const previewKey = patrolling ? (dest && dest !== startKey ? `${startKey}>${dest}` : '') : route ? route.path.join('>') : sameProvincePoint ? startKey : '';
+  const attackKeysNow = route ? route.path.filter((k) => ownerByKey.get(k) !== state.me.countryId) : [];
+  const hostile = !!warTarget || attackKeysNow.length > 0;
   useEffect(() => {
+    onPreviewMeta?.({ point: !patrolling && dest && restPoint(dest, destPoint?.x, destPoint?.y) ? destPoint : null, hostile: !patrolling && hostile });
     if (patrolling) onPreview(dest && dest !== startKey ? [startKey, dest] : null);
-    else onPreview(route ? route.path : null);
+    else onPreview(route ? route.path : sameProvincePoint ? [startKey] : null);
     onPatrolPreview(patrolling && dest ? { key: dest, radius } : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewKey, patrolling, dest, radius]);
+  }, [previewKey, patrolling, dest, radius, destPoint?.x, destPoint?.y, hostile]);
   useEffect(
     () => () => {
       onPreview(null);
+      onPreviewMeta?.({ point: null, hostile: false });
       onPatrolPreview(null);
     },
     [], // eslint-disable-line react-hooks/exhaustive-deps
@@ -126,6 +141,8 @@ export function MovePanel({ campaignId, state, formation, dest, kind = 'move', o
             >)
           : undefined,
         waypoint,
+        dest && restPoint(dest, destPoint?.x, destPoint?.y) ? destPoint : null,
+        !!warTarget,
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['state', campaignId] });
@@ -163,11 +180,11 @@ export function MovePanel({ campaignId, state, formation, dest, kind = 'move', o
     onError: (e) => setError((e as Error).message),
   });
   const attacking = !!dest && !!route && ownerByKey.get(dest) !== state.me.countryId;
-  // Move and Attack are separate orders: a move must stay on your own land, an attack must end in enemy land.
-  const wrongKind = !patrolling && !!route && (kind === 'attack' ? attackKeys.length === 0 : kind === 'move' && attackKeys.length > 0);
+  // Move and Attack work the same: the arrow turns red when the order goes into enemy land, and war is declared on confirm.
+  const wrongKind = false;
 
   const remainingLeg = formation.movement ? Math.max(0, (Date.parse(formation.movement.arrivesAt) - now) / 1000) : 0;
-  const sameSpot = !patrolling && !!dest && dest === startKey && !moving;
+  const sameSpot = !patrolling && !!dest && dest === startKey && !moving && !sameProvincePoint;
 
   return (
     <div className="card move-panel">
@@ -245,7 +262,7 @@ export function MovePanel({ campaignId, state, formation, dest, kind = 'move', o
       )}
       {!patrolling && !dest && (
         <p className="muted small">
-          Click a province on the map. Land forces follow the roads, across your own land and the land of countries you are at war with.
+          Click anywhere on the map: the army goes to that exact spot, along the roads. Clicking another country's land sends the army to attack, and declares war if you are not at war yet.
         </p>
       )}
       {wrongKind && (
@@ -253,11 +270,14 @@ export function MovePanel({ campaignId, state, formation, dest, kind = 'move', o
           {kind === 'attack' ? 'That route does not end in enemy land. Use Move for your own provinces, or pick an enemy province.' : 'That route enters enemy land. Use the Attack order instead.'}
         </p>
       )}
-      {sameSpot && <p className="error small">The army is already there. Pick a different province.</p>}
+      {sameSpot && <p className="error small">The army is already there. Click another spot or province.</p>}
+      {sameProvincePoint && <p className="small">The army will take up position at the chosen spot.</p>}
+      {warTarget && route && (
+        <p className="error small">⚔ This order declares war on {warTargetName}. The army marches in and fights when it arrives.</p>
+      )}
       {!patrolling && dest && !sameSpot && !route && (
         <p className="error small">
-          No route to {PROVINCE_BY_KEY[dest]?.name}. You can only enter your own provinces and those of countries you
-          are at war with. Declare war in the Diplomacy tab to attack.
+          No road leads to {PROVINCE_BY_KEY[dest]?.name} from here. Pick a province that is joined to your army by road.
         </p>
       )}
       {!patrolling && route && attackKeys.length > 0 && (
@@ -284,7 +304,7 @@ export function MovePanel({ campaignId, state, formation, dest, kind = 'move', o
         disabled={
           patrolling
             ? !dest || tooFar || sendTotal === 0 || patrol.isPending
-            : !route || sameSpot || wrongKind || sendTotal === 0 || move.isPending
+            : !(route || sameProvincePoint) || sameSpot || wrongKind || sendTotal === 0 || move.isPending
         }
         onClick={() => {
           setError(null);
@@ -292,7 +312,7 @@ export function MovePanel({ campaignId, state, formation, dest, kind = 'move', o
           else move.mutate();
         }}
       >
-        {patrolling ? 'Confirm patrol' : kind === 'attack' ? 'Confirm attack' : kind === 'waypoint' ? 'Add waypoint' : 'Confirm move'}
+        {patrolling ? 'Confirm patrol' : warTarget ? 'Declare war and go' : kind === 'attack' || attackKeys.length > 0 ? 'Confirm attack' : kind === 'waypoint' ? 'Add waypoint' : 'Confirm move'}
       </button>
       {moving && (
         <button className="danger" disabled={stop.isPending} onClick={() => stop.mutate()}>

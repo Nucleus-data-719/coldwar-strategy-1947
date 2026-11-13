@@ -14,6 +14,8 @@ export function toFormationDto(
     countryId: f.countryId,
     provinceKey: keyById.get(f.provinceId) ?? '',
     units: units.map((u) => ({ unitType: u.unitType, count: u.count })),
+    rest: f.restX != null && f.restY != null ? { x: f.restX, y: f.restY } : null,
+    frontCountryId: f.frontCountryId,
     movement: moving
       ? {
           toKey: keyById.get(f.moveNextProvinceId!) ?? '',

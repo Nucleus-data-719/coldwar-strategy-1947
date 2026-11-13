@@ -194,6 +194,11 @@ export const formations = pgTable(
     seaArrivesAt: ts('sea_arrives_at'),
     seaDestProvinceId: uuid('sea_dest_province_id').references(() => provinces.id, { onDelete: 'set null' }),
     attackTargetId: uuid('attack_target_id'),
+    // Where in the province the army stands (map units); null means the usual spot.
+    restX: doublePrecision('rest_x'),
+    restY: doublePrecision('rest_y'),
+    // Set when the army was assigned to the front against this country: it holds the border and attacks when war comes.
+    frontCountryId: uuid('front_country_id'),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
   (t) => [

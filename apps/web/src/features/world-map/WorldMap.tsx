@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, type Texture } from 'pixi.js';
-import { createStrategicView, type StrategicView } from './strategic-view';
+import { createStrategicView, sharedEdges, type StrategicView } from './strategic-view';
 import { unitArtUrls } from '../../components/unit-art';
 import { TOKEN_BOTTOM, TOKEN_HALF_WIDTH, TOKEN_TOP, drawToken, formationClass } from './army-token';
 import { drawResourceIcon, resourceIconsFor } from './resource-icons';
@@ -15,6 +15,7 @@ import {
   ROADS,
   SEA_DOTS,
   roadPath,
+  restPoint,
   fleetRange,
   hopsFrom,
   nearestSeaNode,
@@ -92,13 +93,21 @@ interface Props {
   /** Countries you are at war with: their provinces get a red outline. */
   atWarWith: string[];
   selectedKey: string | null;
-  onSelect: (key: string | null) => void;
+  onSelect: (key: string | null, point?: { x: number; y: number }) => void;
   /** Your armies. Those with a movement are drawn as markers travelling along their route. */
   formations: FormationDto[];
   /** Server time minus browser time, so markers follow the server clock. */
   clockOffsetMs: number;
   /** Route being previewed while giving a move order. */
   previewPath: string[] | null;
+  /** The exact spot the army was told to go to inside the last province of the route. */
+  previewPoint?: { x: number; y: number } | null;
+  /** The previewed order attacks or declares war: the arrow is drawn red. */
+  previewHostile?: boolean;
+  /** Front-line planning: the country whose border is highlighted in green. */
+  frontTarget?: string | null;
+  /** Front-line planning: a click chooses a country by its border province; hover highlights it. */
+  onFrontHover?: (countryId: string | null) => void;
   /** The previewed route is a sea route (ships follow the dots). */
   previewNaval?: boolean;
   /** Circle of an air patrol being planned. */
@@ -112,7 +121,7 @@ interface Props {
   /** An army figure on the map was clicked. */
   onArmyClick?: (id: string) => void;
   /** Right-click on a province: order the selected army there. */
-  onOrder?: (key: string) => void;
+  onOrder?: (key: string, point?: { x: number; y: number }) => void;
   /** Enemy fleets you can see and mine fields you know of. */
   enemies?: EnemyFleetDto[];
   mines?: SeaMineDto[];
@@ -155,6 +164,7 @@ interface Ctx {
   bRows: Map<string, BuildingRow>;
   makeLabel: (geo: ProvinceGeo, shape: Shape) => Text;
   strategic: StrategicView;
+  frontG: Graphics;
   /** Forces the next frame to re-run the zoom and visibility pass. */
   invalidate: () => void;
   dispose: () => void;
@@ -266,6 +276,10 @@ export function WorldMap({
   onSeaOrder,
   previewSea,
   selectedEnemyId,
+  previewPoint,
+  previewHostile,
+  frontTarget,
+  onFrontHover,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const ctxRef = useRef<Ctx | null>(null);
@@ -276,6 +290,10 @@ export function WorldMap({
   const previewRef = useRef(previewPath);
   const previewNavalRef = useRef(previewNaval);
   const previewPatrolRef = useRef(previewPatrol);
+  const previewPointRef = useRef(previewPoint);
+  const previewHostileRef = useRef(previewHostile);
+  const onFrontHoverRef = useRef(onFrontHover);
+  const frontTargetRef = useRef(frontTarget);
   previewPatrolRef.current = previewPatrol;
   const railSig = [...new Set(provinces.filter((p) => p.buildings.some((b) => b.type === 'railway' && b.status === 'complete' && b.damage < 50)).map((p) => p.key))].sort().join(',');
   const railRef = useRef(railSig);
@@ -301,6 +319,8 @@ export function WorldMap({
   previewSeaRef.current = previewSea;
   selectedEnemyRef.current = selectedEnemyId;
   const hoverRef = useRef<string | null>(null);
+  const ownerOfRef = useRef(new Map<string, string>());
+  ownerOfRef.current = new Map(provinces.map((p) => [p.key, p.ownerCountryId]));
   const colorsRef = useRef(new Map<string, number>());
   colorsRef.current = new Map(countries.map((c) => [c.id, parseInt(c.color.replace('#', ''), 16)]));
   onSelectRef.current = onSelect;
@@ -308,6 +328,10 @@ export function WorldMap({
   offsetRef.current = clockOffsetMs;
   previewRef.current = previewPath;
   previewNavalRef.current = previewNaval;
+  previewPointRef.current = previewPoint;
+  previewHostileRef.current = previewHostile;
+  onFrontHoverRef.current = onFrontHover;
+  frontTargetRef.current = frontTarget;
   const [ready, setReady] = useState(false);
 
   // Create the Pixi application once.
@@ -359,10 +383,18 @@ export function WorldMap({
           const g = new Graphics();
           g.eventMode = 'static';
           g.cursor = 'pointer';
-          g.on('pointertap', () => {
-            if (!dragMoved.current) onSelectRef.current(geo.key);
+          g.on('pointertap', (e) => {
+            if (dragMoved.current) return;
+            const at = world.toLocal(e.global);
+            onSelectRef.current(geo.key, { x: at.x, y: at.y });
           });
-          g.on('rightclick', () => onOrderRef.current?.(geo.key));
+          g.on('pointerover', () => {
+            if (frontTargetRef.current !== undefined && onFrontHoverRef.current) onFrontHoverRef.current(ownerOfRef.current.get(geo.key) ?? null);
+          });
+          g.on('rightclick', (e) => {
+            const at = world.toLocal(e.global);
+            onOrderRef.current?.(geo.key, { x: at.x, y: at.y });
+          });
           world.addChild(g);
           shapes.set(geo.key, { g, label: null, nameLabel: null, icons: null, sig: '', labelText: '', detail: false });
         }
@@ -687,6 +719,9 @@ export function WorldMap({
         app.ticker.add(syncLabels);
 
         // Army layer: route preview, travelling markers. Redrawn every frame from server times.
+        const frontG = new Graphics();
+        frontG.eventMode = 'none';
+        world.addChild(frontG);
         const armyLayer = new Container();
         armyLayer.eventMode = 'passive';
         world.addChild(armyLayer);
@@ -733,9 +768,23 @@ export function WorldMap({
             const line = routePolyline(preview, !!previewNavalRef.current);
             routeG.moveTo(line[0][0], line[0][1]);
             for (const [x, y] of line.slice(1)) routeG.lineTo(x, y);
-            routeG.stroke({ width: 3, color: 0xffffff, alpha: 0.9 });
-            const last = line[line.length - 1];
-            routeG.circle(last[0], last[1], 10).stroke({ width: 2, color: 0xffffff });
+            const hostile = !!previewHostileRef.current;
+            const col = hostile ? 0xff4d3d : 0xffffff;
+            const pt = previewPointRef.current;
+            let tip = line[line.length - 1];
+            if (pt) {
+              const lastKey = preview[preview.length - 1];
+              const inside = restPoint(lastKey, pt.x, pt.y);
+              if (inside) { routeG.lineTo(pt.x, pt.y); tip = [pt.x, pt.y]; }
+            }
+            routeG.stroke({ width: 3, color: col, alpha: 0.95 });
+            const before = line.length > 1 ? line[line.length - 2] : tip;
+            const ang = Math.atan2(tip[1] - before[1], tip[0] - before[0]);
+            const ah = 14;
+            routeG
+              .poly([tip[0], tip[1], tip[0] - Math.cos(ang - 0.45) * ah, tip[1] - Math.sin(ang - 0.45) * ah, tip[0] - Math.cos(ang + 0.45) * ah, tip[1] - Math.sin(ang + 0.45) * ah])
+              .fill({ color: col })
+              .stroke({ width: 1, color: 0x101b27 });
           }
 
           // ---- naval extras: range of the selected fleet, mines, enemy fleets, planned sea route
@@ -923,8 +972,14 @@ export function WorldMap({
               const c = centerOf(f.provinceKey);
               const i = slots.get(f.provinceKey) ?? 0;
               slots.set(f.provinceKey, i + 1);
-              x = c.x + i * 38 * k;
-              y = c.y + 42 * k;
+              const rp = restPoint(f.provinceKey, f.rest?.x, f.rest?.y);
+              if (rp) {
+                x = rp.x;
+                y = rp.y;
+              } else {
+                x = c.x + i * 38 * k;
+                y = c.y + 42 * k;
+              }
             }
             const cls = formationClass(f.units);
             const ownerColor = colors.get(f.countryId) ?? 0x888888;
@@ -1080,6 +1135,7 @@ export function WorldMap({
           bRows,
           makeLabel,
           strategic,
+          frontG,
           invalidate: () => { lastScale = -1; },
           dispose: () => {
             resizeObserver.disconnect();
@@ -1167,10 +1223,10 @@ export function WorldMap({
           selected
             ? { width: 1.6, color: 0xffffff }
             : mine
-              ? { width: 0.5, color: 0xffe27a, alpha: 0.9 }
+              ? { width: 0.5, color: 0xffe27a, alpha: 0.55 }
               : enemy
-                ? { width: 0.5, color: 0xe5483f, alpha: 0.9 }
-                : { width: 1, color: 0x0b1d2e, alpha: 0.75, pixelLine: true },
+                ? { width: 0.5, color: 0xe5483f, alpha: 0.6 }
+                : { width: 1, color: 0x0b1d2e, alpha: 0.3, pixelLine: true },
         );
 
       // Building badges.
@@ -1228,6 +1284,37 @@ export function WorldMap({
       }
     }
   }, [ready, provinces, countries, myCountryId, mode, atWarWith, selectedKey, relationByCountry, supplyShort]);
+
+  // Front lines: a coloured line along the border of every country your armies hold a front against, and a green
+  // line along the border of the country being chosen while you assign one.
+  useEffect(() => {
+    const ctx = ctxRef.current;
+    if (!ctx || !ready) return;
+    const g = ctx.frontG;
+    g.clear();
+    const owner = PROVINCES.map((geo) => ownerOfRef.current.get(geo.key) ?? '');
+    const edgesTo = (target: string) => sharedEdges().filter((e) => (owner[e.a] === myCountryId && owner[e.b] === target) || (owner[e.b] === myCountryId && owner[e.a] === target));
+    const fronts = new Set(formations.map((f) => f.frontCountryId).filter((id): id is string => !!id));
+    const colorFor = (id: string) => {
+      let h = 0;
+      for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      const hue = h % 360;
+      // hsl(hue, 85%, 55%) to rgb
+      const a = 0.85 * Math.min(0.55, 1 - 0.55);
+      const f = (n: number) => { const k = (n + hue / 30) % 12; return 0.55 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+      return (Math.round(f(0) * 255) << 16) | (Math.round(f(8) * 255) << 8) | Math.round(f(4) * 255);
+    };
+    for (const id of fronts) {
+      for (const e of edgesTo(id)) g.moveTo(e.x1, e.y1).lineTo(e.x2, e.y2);
+      g.stroke({ width: 3.2, color: colorFor(id), alpha: 0.95 });
+    }
+    if (frontTarget) {
+      for (const e of edgesTo(frontTarget)) g.moveTo(e.x1, e.y1).lineTo(e.x2, e.y2);
+      g.stroke({ width: 6, color: 0x3ddc5a, alpha: 0.35 });
+      for (const e of edgesTo(frontTarget)) g.moveTo(e.x1, e.y1).lineTo(e.x2, e.y2);
+      g.stroke({ width: 2.4, color: 0x3ddc5a, alpha: 1 });
+    }
+  }, [ready, provinces, formations, frontTarget, myCountryId]);
 
   return <div ref={hostRef} className="map-host" />;
 }

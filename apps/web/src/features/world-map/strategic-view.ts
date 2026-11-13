@@ -17,7 +17,7 @@ export interface StrategicCountry {
   clickKey: string | null;
 }
 
-interface SharedEdge {
+export interface SharedEdge {
   a: number;
   b: number;
   x1: number;
@@ -48,6 +48,10 @@ function buildSharedEdges(): SharedEdge[] {
   });
   return out;
 }
+
+let edgeCache: SharedEdge[] | null = null;
+/** Every edge two provinces share, with the indexes (into PROVINCES) of the two provinces. Built once. */
+export const sharedEdges = (): SharedEdge[] => (edgeCache ??= buildSharedEdges());
 
 const indexByKey = new Map(PROVINCES.map((g, i) => [g.key, i]));
 
@@ -92,7 +96,7 @@ export function createStrategicView(opts: { isDragging: () => boolean; onSelect:
   names.eventMode = 'none';
   container.addChild(fills, borderG, names);
 
-  const edges = buildSharedEdges();
+  const edges = sharedEdges();
   let lastSig = '';
   let labels: { t: Text; size: number }[] = [];
   let scaleSeen = 0.5;

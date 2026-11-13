@@ -27,6 +27,9 @@ interface Props {
   /** The order being planned right now, if any (highlights its button). */
   active: { kind: OrderKind; naval: boolean } | null;
   onOrder: (kind: OrderKind, naval: boolean) => void;
+  /** Opens the split panel / the assign-front-line mode. */
+  onSplit: () => void;
+  onFront: () => void;
   onClose: () => void;
 }
 
@@ -48,6 +51,8 @@ const I = {
   delay: <path d="M12 4a8 8 0 100 16 8 8 0 000-16zM12 8v4l3 2" />,
   cancel: <path d="M12 3a9 9 0 100 18 9 9 0 000-18zM6 6l12 12" />,
   mine: <path d="M12 7a5 5 0 100 10 5 5 0 000-10zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2" />,
+  split: <path d="M12 20v-8M12 12L5 5M12 12l7-7M5 5v4M5 5h4M19 5v4M19 5h-4" />,
+  front: <path d="M3 18l4-9 4 6 4-10 3 7 3-2M3 21h18" />,
   sail: <path d="M3 17h18l-3 4H6zM12 3v12M12 4l6 9h-6" />,
 };
 const Ic = ({ d }: { d: ReactNode }) => (
@@ -57,7 +62,7 @@ const Ic = ({ d }: { d: ReactNode }) => (
 );
 
 /** The order bar and army panel shown at the bottom of the map when an army is selected. */
-export function ArmyBar({ campaignId, state, formation: f, active, onOrder, onClose }: Props) {
+export function ArmyBar({ campaignId, state, formation: f, active, onOrder, onSplit, onFront, onClose }: Props) {
   const qc = useQueryClient();
   const now = useNow(1000);
   const [delayOpen, setDelayOpen] = useState(false);
@@ -71,7 +76,12 @@ export function ArmyBar({ campaignId, state, formation: f, active, onOrder, onCl
   const busy = !!m || !!voyage || onPatrol;
   const held = !!m?.holdUntil && Date.parse(m.holdUntil) > now;
   const refresh = () => qc.invalidateQueries({ queryKey: ['state', campaignId] });
-  const stop = useMutation({ mutationFn: () => api.stopFormation(campaignId, f.id), onSuccess: refresh });
+  const onFrontLine = !!f.frontCountryId;
+  const stop = useMutation({
+    mutationFn: () => (!m && !voyage && !onPatrol && onFrontLine ? api.assignFront(campaignId, f.id, null) : api.stopFormation(campaignId, f.id)),
+    onSuccess: refresh,
+  });
+  const unitTotal = f.units.reduce((s, u) => s + u.count, 0);
   const mines = useMutation({ mutationFn: () => api.layMines(campaignId, f.id), onSuccess: refresh });
 
   const ownerByKey = useMemo(() => new Map(state.provinces.map((p) => [p.key, p.ownerCountryId])), [state.provinces]);
@@ -114,10 +124,10 @@ export function ArmyBar({ campaignId, state, formation: f, active, onOrder, onCl
         <div className="ob-group">
           {hasLand && (
             <>
-              <Btn label="Move" tone="green" on={is('move', false)} onClick={() => onOrder('move', false)} tip="Choose a province on your side of the front">
+              <Btn label="Move" tone="green" on={is('move', false)} onClick={() => onOrder('move', false)} tip="Click anywhere on the map: the army goes to that exact spot">
                 <Ic d={I.move} />
               </Btn>
-              <Btn label="Attack" tone="red" on={is('attack', false)} onClick={() => onOrder('attack', false)} tip="Choose an enemy province to attack">
+              <Btn label="Attack" tone="red" on={is('attack', false)} onClick={() => onOrder('attack', false)} tip="Same as Move, aimed at enemy land. Declares war if needed">
                 <Ic d={I.attack} />
               </Btn>
             </>
@@ -146,10 +156,16 @@ export function ArmyBar({ campaignId, state, formation: f, active, onOrder, onCl
             <Btn label="Delay" tone="blue" disabled={!m} onClick={() => setDelayOpen(true)} tip="Hold the army where it is, or time its arrival">
               <Ic d={I.delay} />
             </Btn>
+            <Btn label="Split" tone="blue" disabled={busy || unitTotal < 2} onClick={onSplit} tip="Send some of the units away as a new army">
+              <Ic d={I.split} />
+            </Btn>
+            <Btn label="Front line" tone="green" disabled={busy || hasShips || onPatrol} onClick={onFront} tip="Spread the army along the border with a country. When war comes it advances and attacks on its own.">
+              <Ic d={I.front} />
+            </Btn>
           </div>
         )}
         <div className="ob-group">
-          <Btn label="Cancel Orders" tone="red" disabled={!busy || stop.isPending} onClick={() => stop.mutate()}>
+          <Btn label="Cancel Orders" tone="red" disabled={(!busy && !onFrontLine) || stop.isPending} onClick={() => stop.mutate()}>
             <Ic d={I.cancel} />
           </Btn>
         </div>
@@ -203,6 +219,12 @@ export function ArmyBar({ campaignId, state, formation: f, active, onOrder, onCl
               <span className="muted">Destination</span>
               <strong>{dest}</strong>
             </div>
+            {onFrontLine && !busy && (
+              <div>
+                <span className="muted">Orders</span>
+                <strong>Holding the front against {state.countries.find((c) => c.id === f.frontCountryId)?.name ?? 'a country'}</strong>
+              </div>
+            )}
             {busy && !onPatrol && (
               <>
                 <div>

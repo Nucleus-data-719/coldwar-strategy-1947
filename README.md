@@ -372,3 +372,30 @@ No database change. **Garrison changes apply to new campaigns only**, so create 
 - **Libya, Algeria and other AI countries**: coastal cities are removed (capitals stay) and real towns on the land borders are added instead (Ghadames, Ghat, Kufra, Jaghbub, Tindouf, Tamanrasset, Bechar, Tebessa, ...). The generated "Fort ..." outposts are gone. Edit `AI_BORDER_TOWNS` in `packages/shared/scripts/map-source.mjs`.
 - **Less clutter**: resource icons, building badges and city names show only on your own provinces. Foreign countries show just their capital. The Resources map mode still shows everyone's icons.
 - Province keys changed: restart the server and use the new default campaign.
+
+## Army orders, round 1
+
+**Apply the database changes first:** `npm run db:push`, or run `docs/orders-update.sql` in the Neon SQL editor (adds `rest_x`, `rest_y`, `front_country_id` to `formations`). Then restart the server.
+
+- **Move and Attack with an arrow.** Click anywhere on the map: the arrow ends on the exact spot you clicked and the army stands there on arrival (a move inside one province works too). The arrow is white for your own land and **red** when the order goes into enemy land.
+- **War on demand.** Sending troops into a country you are not at war with shows "declares war on X" in red; the button reads *Declare war and go*, and war is declared when you confirm. (Allies still have to be un-allied first.)
+- **Armies merge by themselves.** Idle armies of yours in the same place join when one arrives: land with land, aircraft with aircraft, ships with ships. A mix of unit types becomes "1st Army", "2nd Army", and so on. Armies you placed on different spots inside a province stay apart. AI-controlled countries keep their own armies.
+- **Split** (new order button): choose how many of each unit to peel off; the new army stays put and can be given orders.
+- **Front line** (new order button, like HOI4): hover a border (it glows green), click the country, press *Assign to border*. The army spreads out along the border so every border province has a unit (extra units go to evenly spread provinces; with fewer units than provinces, evenly spread provinces are covered and cities first). A coloured line marks the front on the map. When you are at war with that country the guards advance and attack on their own, cities first, until the land is taken. *Cancel Orders* releases them.
+- **Fainter borders:** province, own-country and enemy outlines are thinner and lighter.
+
+## Speed and database transfer, round 1
+
+Why Neon showed 4.5 GB: every game-state request read the whole world (all 2,351 province rows with their large columns, every army stack), the browser refetched it after each event, the AI re-read the whole world for each decision in wartime, and the game clock ran every 5 s all night while the dev server was on. Changes:
+
+- **State** reads only the three province columns the map needs, sums army counts in SQL (one row per province), and shares one snapshot of the world between requests for 3 s (`WORLD_CACHE_MS`). The snapshot is dropped at once when buildings, ownership or wars change. Your own armies and resources are always read fresh.
+- **Browser** refetches at most every 2.5 s after a push instead of every 1.5 s.
+- **Game clock** runs every `TICK_MS` (5 s) while a browser is connected and every `IDLE_TICK_MS` (60 s) while nobody is. Nothing is lost: all progress is stored as timestamps, and resolves at the next tick.
+- **AI at war** reads only the columns it uses and only its own and its enemies' armies.
+- New optional `.env` values: `IDLE_TICK_MS`, `WORLD_CACHE_MS`.
+
+Not measured here (no database in the sandbox). After deploying, check `/api/metrics` (x-admin-token header) and Neon's monthly transfer graph.
+
+## Private test site (Railway)
+
+The server now serves the built web app too (one address, no CORS), asks for `SITE_PASSWORD` before anything loads, and tells search engines not to list it. `Dockerfile` and `railway.json` build and run it; the tables are created at start. Step by step: `docs/deploy-railway.md`. New `.env` values: `SITE_PASSWORD`, `NOINDEX`, `WEB_DIST`. New npm scripts: `build:deploy`, `start:deploy`. New dependency: `compression` (run `npm install`).

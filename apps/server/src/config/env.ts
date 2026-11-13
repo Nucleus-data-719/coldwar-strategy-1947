@@ -26,6 +26,10 @@ const schema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   GAME_SPEED: z.coerce.number().positive().default(1),
   TICK_MS: z.coerce.number().int().min(500).default(5000),
+  // How often the game clock runs while nobody is connected. Progress is stored as timestamps, so nothing is lost; it just resolves later.
+  IDLE_TICK_MS: z.coerce.number().int().min(500).default(60000),
+  // How long the shared world snapshot used by /state is reused (ms).
+  WORLD_CACHE_MS: z.coerce.number().int().min(0).default(3000),
   INACTIVITY_HOURS: z.coerce.number().positive().default(48),
   AI_INTERVAL_SECONDS: z.coerce.number().positive().default(300),
   AI_WAR_INTERVAL_SECONDS: z.coerce.number().positive().default(60),
@@ -35,6 +39,12 @@ const schema = z.object({
   BETA_INVITE_CODES: z.string().default(''),
   // Secret for GET /api/metrics (send it in the x-admin-token header). Empty = metrics off.
   ADMIN_TOKEN: z.string().default(''),
+  // Private test site: when set, every page asks for this password once before anything loads.
+  SITE_PASSWORD: z.string().default(''),
+  // Ask search engines not to list the site (robots.txt and an X-Robots-Tag header). Turn off for the public launch.
+  NOINDEX: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
+  // Folder with the built web app. Empty means the default (apps/web/dist next to the server); the server serves it when it exists.
+  WEB_DIST: z.string().default(''),
   // Rate limits per client address per minute: all requests, and sign-in/registration. Raise both only for load tests.
   RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(240),
   AUTH_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(10),
