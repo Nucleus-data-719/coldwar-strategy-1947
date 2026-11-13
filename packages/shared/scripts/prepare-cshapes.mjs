@@ -1,19 +1,22 @@
-// Downloads CShapes 2.0 (country borders 1886-2019), keeps the borders valid on 31 Dec 1947, simplifies them
-// and writes a small file you can attach to the chat.
+// Downloads CShapes 2.0 (country borders 1886-2019), keeps the borders valid on one date (default 1 Jan 1950),
+// simplifies them and writes a small file you can attach to the chat.
 //   node packages/shared/scripts/prepare-cshapes.mjs                (downloads from the ETH server)
 //   node packages/shared/scripts/prepare-cshapes.mjs path/to/CShapes-2.0.geojson   (use a file you already have)
-// Output: packages/shared/scripts/data/cshapes-1947.json
+//   node packages/shared/scripts/prepare-cshapes.mjs --date=1947-12-31             (another date)
+// Output: packages/shared/scripts/data/cshapes-<year>.json
 import { mkdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const URL_ = 'https://icr.ethz.ch/data/cshapes/CShapes-2.0.geojson';
-const AT = Date.UTC(1947, 11, 31); // the reference date
+const dateArg = process.argv.find((a) => a.startsWith('--date='))?.slice(7) ?? '1950-01-01';
+const [DY, DM, DD] = dateArg.split('-').map(Number);
+const AT = Date.UTC(DY, DM - 1, DD); // the reference date
 const TOLERANCE = 0.04; // degrees, about 4 km: plenty for a game map
 const here = dirname(fileURLToPath(import.meta.url));
-const OUT = join(here, 'data', 'cshapes-1947.json');
+const OUT = join(here, 'data', `cshapes-${DY}.json`);
 
-const src = process.argv[2];
+const src = process.argv.slice(2).find((a) => !a.startsWith('--'));
 let raw;
 if (src) raw = readFileSync(src, 'utf8');
 else {
@@ -97,8 +100,8 @@ for (const f of feats) {
     polygons: rings,
   });
 }
-console.log(`Countries on 31 Dec 1947: ${out.length}`);
+console.log(`Countries on ${dateArg}: ${out.length}`);
 console.log(out.map((c) => c.name).sort().join(', '));
 mkdirSync(dirname(OUT), { recursive: true });
-writeFileSync(OUT, JSON.stringify({ date: '1947-12-31', source: 'CShapes 2.0 (Schvitz et al.)', countries: out }));
+writeFileSync(OUT, JSON.stringify({ date: dateArg, source: 'CShapes 2.0 (Schvitz et al.)', countries: out }));
 console.log(`Wrote ${OUT} (${(statSync(OUT).size / 1e6).toFixed(1)} MB). Attach this file to the chat.`);
