@@ -51,7 +51,7 @@ export function LobbyPage({ user, onEnter, onLogout }: Props) {
     <div className="lobby">
       <header className="topbar">
         <Crest size={32} />
-        <strong>Cold War 1947</strong>
+        <strong>Cold War 1950</strong>
         <span className="spacer" />
         <span className="muted">Signed in as {user.username}</span>
         <button onClick={onLogout}>Log out</button>

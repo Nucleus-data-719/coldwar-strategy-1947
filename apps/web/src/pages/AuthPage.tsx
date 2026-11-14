@@ -33,7 +33,7 @@ export function AuthPage() {
         <div className="brand">
           <Crest size={56} />
           <h1>
-            Cold War <span className="year">1947</span>
+            Cold War <span className="year">1950</span>
           </h1>
           <p>Command a nation. Shape the world.</p>
         </div>

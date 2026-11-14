@@ -4,7 +4,7 @@ import type { BuildingType, UnitType } from '@cw/shared';
 
 /**
  * Period art for the game: unit silhouettes, building icons and national flags, all drawn as SVG.
- * Units are drawn like 1940s recognition silhouettes; flags are the ones in use around 1947.
+ * Units are drawn like 1940s recognition silhouettes; flags are the ones in use around 1950.
  */
 
 const UNIT_ART: Record<UnitType, ReactNode> = {
@@ -223,7 +223,7 @@ function star(cx: number, cy: number, r: number, fill: string): ReactNode {
   return <polygon points={pts.join(' ')} fill={fill} />;
 }
 
-/** Flags used around 1947. Regional blocs without a single historic flag get an emblem banner (see below). */
+/** Flags used around 1950. Regional blocs without a single historic flag get an emblem banner (see below). */
 const FLAGS: Record<string, FlagArt> = {
   // Soviet Union: red, gold hammer-and-sickle star.
   SOV: () => (
@@ -255,8 +255,19 @@ const FLAGS: Record<string, FlagArt> = {
     </>
   ),
   FRA: () => <>{stripesV(['#002654', '#ffffff', '#ce1126'])}</>,
-  // Republic of China, 1947: blue canton with a white sun on red.
+  // People's Republic of China, 1949: red with one large and four small yellow stars.
   CHN: () => (
+    <>
+      <rect width={W} height={H} fill="#de2910" />
+      {star(5, 5.2, 3, '#ffde00')}
+      {star(10.2, 1.9, 1, '#ffde00')}
+      {star(12.2, 4, 1, '#ffde00')}
+      {star(12.2, 6.8, 1, '#ffde00')}
+      {star(10.2, 8.8, 1, '#ffde00')}
+    </>
+  ),
+  // Republic of China (Taiwan): blue canton with a white sun on red.
+  TWN: () => (
     <>
       <rect width={W} height={H} fill="#de2910" />
       <rect width="15" height="10" fill="#002395" />
@@ -265,7 +276,7 @@ const FLAGS: Record<string, FlagArt> = {
       <circle cx="7.5" cy="5" r="1.1" fill="#fff" />
     </>
   ),
-  // India, 1947: saffron, white, green with a wheel.
+  // India, 1950: saffron, white, green with a wheel.
   IND: () => (
     <>
       {stripesH(['#ff9933', '#ffffff', '#138808'])}
@@ -318,7 +329,7 @@ const FLAGS: Record<string, FlagArt> = {
       <circle cx={W / 2} cy={H / 2} r="5.6" fill="#bc002d" />
     </>
   ),
-  // Canada, 1947: the Red Ensign.
+  // Canada, 1950: the Red Ensign.
   CAN: () => (
     <>
       <rect width={W} height={H} fill="#c8102e" />
@@ -353,8 +364,35 @@ const FLAGS: Record<string, FlagArt> = {
     </>
   ),
   IDN: () => <>{stripesH(['#ce1126', '#ffffff'])}</>,
-  // Germany, 1947: no state flag; the black-red-gold of the republic.
-  GER: () => <>{stripesH(['#000000', '#dd0000', '#ffce00'])}</>,
+  // West Germany (Federal Republic, 1949): the black-red-gold tricolour.
+  FRG: () => <>{stripesH(['#000000', '#dd0000', '#ffce00'])}</>,
+  // East Germany (1949): the same tricolour. A small gold ring marks it so the two Germanys can be told apart at a glance.
+  GDR: () => (
+    <>
+      {stripesH(['#000000', '#dd0000', '#ffce00'])}
+      <circle cx={W / 2} cy={H / 2} r="3" fill="#ffce00" stroke="#000" strokeWidth="0.5" />
+      <circle cx={W / 2} cy={H / 2} r="1.3" fill="#dd0000" />
+    </>
+  ),
+  // North Korea (1948): blue, white and red bands with a red star on a white disc.
+  PRK: () => (
+    <>
+      <rect width={W} height={H} fill="#024fa2" />
+      <rect y="3.4" width={W} height="13.2" fill="#fff" />
+      <rect y="4.6" width={W} height="10.8" fill="#ed1c24" />
+      <circle cx="9" cy={H / 2} r="3.5" fill="#fff" />
+      {star(9, H / 2, 2.6, '#ed1c24')}
+    </>
+  ),
+  // Israel (1948): white with two blue stripes and the star of David.
+  ISR: () => (
+    <>
+      <rect width={W} height={H} fill="#fff" />
+      <rect y="2.2" width={W} height="2.2" fill="#0038b8" />
+      <rect y={H - 4.4} width={W} height="2.2" fill="#0038b8" />
+      <path d={`M${W / 2} 6.1L${W / 2 + 3} 11.3H${W / 2 - 3}ZM${W / 2} 13.9L${W / 2 + 3} 8.7H${W / 2 - 3}Z`} fill="none" stroke="#0038b8" strokeWidth="0.6" />
+    </>
+  ),
   ITA: () => <>{stripesV(['#009246', '#ffffff', '#ce2b37'])}</>,
   ESP: () => (
     <>
@@ -398,7 +436,7 @@ const FLAGS: Record<string, FlagArt> = {
       <circle cx={W / 2} cy={H / 2} r="2.6" fill="#f6b40e" />
     </>
   ),
-  // Iraq, 1947: kingdom flag with the red triangle and two stars.
+  // Iraq, 1950: kingdom flag with the red triangle and two stars.
   IRQ: () => (
     <>
       {stripesH(['#000000', '#ffffff', '#007a3d'])}

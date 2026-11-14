@@ -77,7 +77,7 @@ interface Saved {
   startProvinces: number;
 }
 
-const key = (campaignId: string) => `cw1947.tutorial.${campaignId}`;
+const key = (campaignId: string) => `cw1950.tutorial.${campaignId}`;
 
 function load(campaignId: string): Saved | null {
   try {

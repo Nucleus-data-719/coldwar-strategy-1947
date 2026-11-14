@@ -38,7 +38,7 @@ export const campaigns = pgTable('campaigns', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   status: text('status').notNull().default('active'),
-  startYear: integer('start_year').notNull().default(1947),
+  startYear: integer('start_year').notNull().default(1950),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
 

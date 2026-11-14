@@ -341,7 +341,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
         <div className="hud-id">
           {myCountry ? <Flag code={myCountry.code} color={myCountry.color} width={42} /> : <Crest size={36} />}
           <div className="hud-title">
-            <strong>{myCountry?.name ?? 'Cold War 1947'}</strong>
+            <strong>{myCountry?.name ?? 'Cold War 1950'}</strong>
             <span>{state.campaign.name}</span>
           </div>
           {state.campaign.gameSpeed !== 1 && <span className="pill">Speed x{state.campaign.gameSpeed}</span>}

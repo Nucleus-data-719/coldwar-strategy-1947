@@ -26,7 +26,7 @@ interface Settings {
   musicVolume: number;
 }
 
-const KEY = 'cw1947.audio';
+const KEY = 'cw1950.audio';
 const defaults: Settings = { sfx: true, music: false, sfxVolume: 0.7, musicVolume: 0.35 };
 
 function load(): Settings {

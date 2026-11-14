@@ -251,7 +251,7 @@ function buildProvinces(): ProvinceGeo[] {
 }
 
 /** How many provinces each size of country has: superpowers 65, major countries 50 to 65, medium 35 to 50, AI-run minor countries 15 or fewer. */
-export const TIER_PROVINCES: Record<CountryTier, [number, number]> = { super: [65, 65], major: [50, 65], medium: [35, 50], minor: [1, 15] };
+export const TIER_PROVINCES: Record<CountryTier, [number, number]> = { super: [65, 65], major: [50, 65], medium: [8, 50], minor: [1, 15] };
 const TIER_OF = new Map(COUNTRIES.map((c) => [c.code, c.tier]));
 export const tierOf = (code: string): CountryTier => TIER_OF.get(code) ?? 'minor';
 

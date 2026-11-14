@@ -6,8 +6,8 @@ const of = (code: string) => PROVINCES.filter((p) => p.countryCode === code);
 const playable = COUNTRIES.filter((c) => c.playable);
 
 describe('map balance', () => {
-  it('there are 40 playable countries; the United States and the Soviet Union are the superpowers', () => {
-    expect(playable.length).toBe(40);
+  it('there are 44 playable countries; the United States and the Soviet Union are the superpowers', () => {
+    expect(playable.length).toBe(44);
     expect(tierOf('USA')).toBe('super');
     expect(tierOf('SOV')).toBe('super');
     expect(playable.filter((c) => tierOf(c.code) === 'super').length).toBe(2);
@@ -54,7 +54,7 @@ describe('map balance', () => {
     for (const c of playable) {
       const n = of(c.code).filter((p) => p.isCity).length;
       if (c.tier === 'super' || c.tier === 'major') expect(n).toBe(7);
-      else if (of(c.code).length >= 40) expect(n).toBe(6);
+      else if (of(c.code).length >= 40 || c.code === 'FRG') expect(n).toBe(6);
       else expect(n >= 3 && n <= 5).toBe(true);
     }
   });
@@ -90,6 +90,15 @@ describe('map balance', () => {
     expect(has('CHN', 'rare') >= 2).toBe(true);
     expect(has('TUR', 'steel') >= 2).toBe(true);
     expect(of('ROU').some((p) => p.name === 'Ploiesti' && p.deposit === 'oil')).toBe(true);
+  });
+
+  it('the 1950 world: two Germanys, two Koreas, two Chinas, Israel, and Tibet standing alone', () => {
+    for (const code of ['FRG', 'GDR', 'KOR', 'PRK', 'CHN', 'TWN', 'ISR']) expect(of(code).length > 0).toBe(true);
+    expect(COUNTRIES.some((c) => c.code === 'GER')).toBe(false);
+    expect(of('TWN').every((p) => p.center.x > 2000)).toBe(true);
+    expect(COUNTRIES.some((c) => c.name === 'Tibet' && !c.playable)).toBe(true);
+    expect(of('KOR').some((p) => p.name === 'Chunchon') && of('PRK').some((p) => p.name === 'Kaesong')).toBe(true);
+    expect(of('ISR').some((p) => p.name === 'Tel Aviv')).toBe(true);
   });
 
   it('each country has a capital, and its capital is a city', () => {

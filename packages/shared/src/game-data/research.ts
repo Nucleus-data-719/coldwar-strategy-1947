@@ -37,7 +37,7 @@ export interface TechDef {
 }
 
 const TIERS: Record<number, { era: string; cost: PartialResources; seconds: number }> = {
-  1: { era: '1947', cost: { money: 600, electronics: 20 }, seconds: 2 * 3600 },
+  1: { era: '1950', cost: { money: 600, electronics: 20 }, seconds: 2 * 3600 },
   2: { era: '1955', cost: { money: 1200, electronics: 50, steel: 100 }, seconds: 4 * 3600 },
   3: { era: '1965', cost: { money: 2200, electronics: 100, steel: 200 }, seconds: 8 * 3600 },
   4: { era: '1975', cost: { money: 3500, electronics: 160, steel: 300, rare: 20 }, seconds: 16 * 3600 },

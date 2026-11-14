@@ -399,3 +399,14 @@ Not measured here (no database in the sandbox). After deploying, check `/api/met
 ## Private test site (Railway)
 
 The server now serves the built web app too (one address, no CORS), asks for `SITE_PASSWORD` before anything loads, and tells search engines not to list it. `Dockerfile` and `railway.json` build and run it; the tables are created at start. Step by step: `docs/deploy-railway.md`. New `.env` values: `SITE_PASSWORD`, `NOINDEX`, `WEB_DIST`. New npm scripts: `build:deploy`, `start:deploy`. New dependency: `compression` (run `npm install`).
+
+## The 1950 world
+
+The game now starts on 1 January 1950 and is called Cold War 1950.
+
+- **Borders** come from CShapes on 1 Jan 1950 (`packages/shared/scripts/data/cshapes-1950.json`; made with `prepare-cshapes.mjs`, which now takes `--date=YYYY-MM-DD`). Regenerate the map with `node packages/shared/scripts/generate-map.mjs`.
+- **44 playable countries** (was 40): Germany is split into **West Germany** (Bonn, 6 cities) and **East Germany** (East Berlin, 4); Korea into **South Korea** and **North Korea**, with border cities Chunchon and Kaesong facing each other; China is the **People's Republic** (capital Beijing, Nanjing is now a city) and **Taiwan** (Republic of China, Taipei) is playable; **Israel** (Jerusalem, Tel Aviv, Haifa, Eilat) is new.
+- **Tibet** stands alone as an independent AI country (Lhasa, Shigatse, Chamdo), so it can be taken. **Jordan** includes the West Bank, **Egypt** holds Gaza, Dutch New Guinea is separate, and the 1947-only entries (Palestine, Newfoundland, Kashmir halves) are gone.
+- **Flags** drawn for the PRC, Taiwan (ROC), both Germanys, North Korea and Israel; South Korea keeps the Taegeukgi.
+- Names, start year, research era and saved-preference keys say 1950. The default campaign is "Classic Cold War 1950".
+- **Province keys changed again.** Old campaigns are hidden automatically and a new default campaign is created at start. To delete the hidden ones, run `docs/map-rebuild.sql`.

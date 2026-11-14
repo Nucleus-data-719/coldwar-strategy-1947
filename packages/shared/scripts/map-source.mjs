@@ -1,4 +1,4 @@
-// Source data for the world map (generate-map.mjs). Borders come from CShapes (data/cshapes-1947.json, 31 Dec 1947).
+// Source data for the world map (generate-map.mjs). Borders come from CShapes (data/cshapes-1950.json, 1 Jan 1950).
 // Resource letters: f food, o oil, s steel, e electronics, r rare earth, w wood.
 //
 // Rules the generator applies:
@@ -11,22 +11,22 @@ export const MERGE = {
   'United States of America': 'USA', Alaska: 'USA', Hawaii: 'USA', 'Puerto Rico': 'USA',
   'Russia (Soviet Union)': 'SOV',
   Canada: 'CAN', Newfoundland: 'CAN',
-  China: 'CHN', Tibet: 'CHN',
+  China: 'CHN', Taiwan: 'TWN', Israel: 'ISR', Jordan: 'JOR', 'West Bank': 'JOR', Gaza: 'EGY',
   India: 'IND', 'Jammu and Kashmir': 'IND',
   Pakistan: 'PAK', 'Kashmir (North, Azad)': 'PAK',
   Brazil: 'BRA',
-  Australia: 'AUS', Papua: 'AUS', 'New Guinea (German New Guinea) (Kaiser Wilhelmsland)': 'AUS',
+  Australia: 'AUS', Papua: 'AUS', 'New Guinea (German New Guinea) (Kaiser Wilhelmsland)': 'AUS', 'Papua New Guinea': 'AUS',
   Argentina: 'ARG', Mexico: 'MEX', Indonesia: 'IDN',
   'United Kingdom': 'GBR',
   France: 'FRA', Guadeloupe: 'FRA', Martinique: 'FRA', Reunion: 'FRA', 'French Guyana': 'FRA',
   'French Polynesia': 'FRA', 'New Caledonia and Dependencies': 'FRA',
-  'German Federal Republic': 'GER', 'German Democratic Republic': 'GER',
+  'German Federal Republic': 'FRG', 'German Democratic Republic': 'GDR',
   Japan: 'JPN', 'Turkey (Ottoman Empire)': 'TUR',
   'Italy/Sardinia': 'ITA',
   Spain: 'ESP', 'Spanish Morocco': 'ESP', 'Spanish West Africa': 'ESP',
   Poland: 'POL', Sweden: 'SWE', Norway: 'NOR', Finland: 'FIN', Rumania: 'ROU', Yugoslavia: 'YUG', Czechoslovakia: 'CZE',
   Egypt: 'EGY', 'Iran (Persia)': 'IRN', Iraq: 'IRQ', 'Saudi Arabia': 'SAU', 'South Africa': 'ZAF',
-  'Korea, People\'s Republic of': 'KOR', 'Korea, Republic of': 'KOR',
+  'Korea, People\'s Republic of': 'PRK', 'Korea, Republic of': 'KOR',
   Thailand: 'THA', 'Myanmar (Burma)': 'MMR', Philippines: 'PHL', 'Vietnam (Annam/Cochin China/Tonkin)': 'VNM',
   Ethiopia: 'ETH', Colombia: 'COL', Chile: 'CHL', Peru: 'PER', Venezuela: 'VEN',
 };
@@ -40,7 +40,7 @@ export const RENAME = {
   Togo: 'French Togoland', 'Central African Republic': 'Ubangi-Shari', Guinea: 'French Guinea', 'Equatorial Guinea': 'Spanish Guinea',
   'Tanzania (Tanganyika)': 'Tanganyika', 'Zimbabwe (Rhodesia)': 'Southern Rhodesia', Zambia: 'Northern Rhodesia', Malawi: 'Nyasaland',
   'Sri Lanka (Ceylon)': 'Ceylon', Malaysia: 'Malaya', 'Swaziland (Eswatini)': 'Swaziland', 'Madagascar (Malagasy)': 'Madagascar',
-  Jordan: 'Transjordan', 'Yemen (Arab Republic of Yemen)': 'Yemen', 'Sabah (North Borneo)': 'North Borneo',
+  Jordan: 'Jordan', 'West Bank': 'Jordan', 'West Irian (Dutch New Guinea)': 'Dutch New Guinea', 'Yemen (Arab Republic of Yemen)': 'Yemen', 'Sabah (North Borneo)': 'North Borneo',
   'East Timor': 'Portuguese Timor', 'British Somaliland (Somaliland Republic)': 'British Somaliland', Aden: 'Aden Colony',
   'Austria': 'Austria', 'Cyprus': 'Cyprus', 'Libya': 'Libya',
 };
@@ -68,6 +68,7 @@ export const AI_CAPITAL_RESOURCE = {
 };
 /** Extra cities for AI countries: [country (CShapes name), city, lon, lat, resource]. */
 export const AI_CITIES = [
+  ['Tibet', 'Shigatse', 88.88, 29.27, 'f'], ['Tibet', 'Chamdo', 97.17, 31.14, 'w'],
   ['Algeria', 'Hassi Messaoud', 6.07, 31.67, 'o'], ['Algeria', 'Oran', -0.64, 35.7, 'f'], ['Algeria', 'Ouenza', 8.1, 35.95, 's'], ['Algeria', 'Constantine', 6.61, 36.36, 'f'],
   ['Libya', 'Benghazi', 20.07, 32.12, 'f'], ['Libya', 'Sirte', 16.6, 31.2, 'o'],
   ['Sudan', 'Port Sudan', 37.2, 19.6, 'f'], ['Sudan', 'Wau', 28, 7.7, 'w'],
@@ -120,12 +121,12 @@ export const PLAYABLE = [
       c('Yakutsk', 129.7, 62.03, 'r'), c('Riga', 24.1, 56.95, 'f')],
     deposits: [c('Magnitogorsk Iron Mountain', 59.05, 53.4, 's'), c('Siberian Taiga', 95.0, 58.0, 'w')] },
   // ---------- major ----------
-  { code: 'CHN', name: 'China', color: '#d9a62e', tier: 'major', n: 65, blurb: 'Huge population; rare earths of Inner Mongolia, oil of the north-west.',
+  { code: 'CHN', name: 'China', color: '#d9a62e', tier: 'major', n: 62, blurb: 'The new People\'s Republic: huge population, rare earths of Inner Mongolia, oil of the north-west.',
     bonus: { manpower: 20000, food: 1500, rare: 120 },
-    capital: c('Nanjing', 118.8, 32.06, 'f'),
-    cities: [c('Shanghai', 121.47, 31.23, 'e'), c('Beijing', 116.4, 39.9, 'f'), c('Tientsin', 117.2, 39.13, 's'), c('Wuhan', 114.3, 30.59, 's'), c('Canton', 113.26, 23.13, 'f'), c('Chungking', 106.55, 29.56, 's'),
+    capital: c('Beijing', 116.4, 39.9, 'f'),
+    cities: [c('Shanghai', 121.47, 31.23, 'e'), c('Nanjing', 118.8, 32.06, 'f'), c('Tientsin', 117.2, 39.13, 's'), c('Wuhan', 114.3, 30.59, 's'), c('Canton', 113.26, 23.13, 'f'), c('Chungking', 106.55, 29.56, 's'),
       c('Chengdu', 104.07, 30.67, 'f'), c("Xi'an", 108.94, 34.34, 'f'), c('Harbin', 126.6, 45.75, 'w'), c('Mukden', 123.43, 41.8, 's'), c('Lanzhou', 103.83, 36.06, 'o'), c('Urumqi', 87.6, 43.8, 'o'),
-      c('Kunming', 102.7, 25.04, 'r'), c('Taiyuan', 112.55, 37.87, 'f'), c('Lhasa', 91.1, 29.65, 'r'), c('Changsha', 112.94, 28.2, 'f')],
+      c('Kunming', 102.7, 25.04, 'r'), c('Taiyuan', 112.55, 37.87, 'f'), c('Xining', 101.78, 36.62, 'r'), c('Changsha', 112.94, 28.2, 'f')],
     deposits: [c('Bayan Obo Mine', 109.97, 41.8, 'r'), c('Greater Khingan Forests', 123.0, 50.5, 'w')] },
   { code: 'IND', name: 'India', color: '#e07a2d', tier: 'major', n: 55, blurb: 'Vast population, Tata steel and Assam oil.',
     bonus: { manpower: 12000, food: 1500, wood: 300 },
@@ -146,13 +147,17 @@ export const PLAYABLE = [
       c('Strasbourg', 7.75, 48.58, 'f'), c('Le Havre', 0.11, 49.49, 'o'), c('Metz', 6.18, 49.12, 's'), c('Saint-Etienne', 4.39, 45.44, 's'), c('Rennes', -1.68, 48.12, 'f'), c('Ajaccio', 8.74, 41.92, 'f'),
       c('Cayenne', -52.33, 4.93, 'w'), c('Noumea', 166.46, -22.27, 'r')],
     deposits: [c('Lorraine Iron Basin', 5.9, 49.4, 's'), c('Landes Forest', -0.9, 44.1, 'w')] },
-  { code: 'GER', name: 'Germany', color: '#7a7a85', tier: 'major', n: 55, blurb: 'Defeated but industrious: the Ruhr, Saxon mines and the Black Forest.',
+  { code: 'FRG', name: 'West Germany', color: '#7a7a85', tier: 'medium', n: 34, blurb: 'The new Federal Republic: the Ruhr, the Rhine and Marshall Plan money, facing the Iron Curtain.',
     bonus: { money: 800, steel: 600, electronics: 40 },
-    capital: c('Berlin', 13.4, 52.52, 'e'),
-    cities: [c('Hamburg', 9.99, 53.55, 's'), c('Munich', 11.58, 48.14, 'e'), c('Cologne', 6.96, 50.94, 'e'), c('Frankfurt', 8.68, 50.11, 'e'), c('Stuttgart', 9.18, 48.78, 'e'), c('Duesseldorf', 6.77, 51.23, 's'),
-      c('Essen', 7.01, 51.46, 's'), c('Dortmund', 7.47, 51.51, 's'), c('Leipzig', 12.37, 51.34, 'f'), c('Dresden', 13.74, 51.05, 'e'), c('Hanover', 9.73, 52.38, 'o'), c('Nuremberg', 11.08, 49.45, 'f'),
-      c('Bremen', 8.8, 53.08, 'f'), c('Freiburg', 7.85, 47.99, 'w')],
-    deposits: [c('Erzgebirge Mines', 12.9, 50.5, 'r'), c('Harz Forests', 10.6, 51.7, 'w')] },
+    capital: c('Bonn', 7.1, 50.73, 'e'),
+    cities: [c('Hamburg', 9.99, 53.55, 's'), c('Munich', 11.58, 48.14, 'e'), c('Cologne', 6.96, 50.94, 'e'), c('Frankfurt', 8.68, 50.11, 'e'), c('Stuttgart', 9.18, 48.78, 'e'), c('Essen', 7.01, 51.46, 's'),
+      c('Dortmund', 7.47, 51.51, 's'), c('Hanover', 9.73, 52.38, 'o'), c('Nuremberg', 11.08, 49.45, 'f'), c('Bremen', 8.8, 53.08, 'f'), c('Freiburg', 7.85, 47.99, 'w')],
+    deposits: [c('Salzgitter Iron Ore', 10.35, 52.15, 's'), c('Black Forest', 8.2, 48.0, 'w')] },
+  { code: 'GDR', name: 'East Germany', color: '#a8704a', tier: 'medium', n: 20, blurb: 'The Soviet-backed German Democratic Republic: lignite, Saxon uranium and the front line at the Elbe.',
+    bonus: { money: 300, steel: 200, manpower: 2000 },
+    capital: c('East Berlin', 13.4, 52.52, 'e'),
+    cities: [c('Leipzig', 12.37, 51.34, 'f'), c('Dresden', 13.74, 51.05, 'e'), c('Rostock', 12.14, 54.09, 'w'), c('Magdeburg', 11.63, 52.12, 's'), c('Frankfurt (Oder)', 14.55, 52.35, 'f')],
+    deposits: [c('Wismut Uranium Mines', 12.7, 50.5, 'r'), c('Lusatian Lignite Basin', 14.3, 51.5, 'o')] },
   { code: 'CAN', name: 'Canada', color: '#d94f70', tier: 'major', n: 50, blurb: 'Huge, cold and rich in timber, nickel and the new Leduc oil.',
     bonus: { food: 1500, wood: 800, oil: 200 },
     capital: c('Ottawa', -75.7, 45.42, 'f'),
@@ -282,12 +287,16 @@ export const PLAYABLE = [
     cities: [c('Johannesburg', 28.05, -26.2, 'r'), c('Cape Town', 18.42, -33.92, 'f'), c('Durban', 31.02, -29.86, 'e'), c('Port Elizabeth', 25.6, -33.96, 'e'), c('Vereeniging', 27.93, -26.67, 's'), c('Sasolburg', 27.8, -26.8, 'o'),
       c('Kimberley', 24.76, -28.74, 'r'), c('Knysna', 23.05, -34.04, 'w'), c('Bloemfontein', 26.2, -29.12, 'f')],
     deposits: [c('Sishen Iron Mines', 22.99, -27.75, 's'), c('Natal Timber Estates', 30.5, -29.0, 'w')] },
-  { code: 'KOR', name: 'Korea', color: '#8f7ab8', tier: 'medium', n: 35, blurb: 'A divided land: northern mines and southern rice paddies.',
-    bonus: { manpower: 5000, money: 300 },
+  { code: 'KOR', name: 'South Korea', color: '#8f7ab8', tier: 'medium', n: 20, blurb: 'The Republic of Korea, two years old: rice paddies, a long border on the 38th parallel.',
+    bonus: { manpower: 3500, money: 250, food: 400 },
     capital: c('Seoul', 126.98, 37.57, 'e'),
-    cities: [c('Pyongyang', 125.75, 39.02, 's'), c('Busan', 129.07, 35.18, 'f'), c('Daegu', 128.6, 35.87, 'f'), c('Incheon', 126.7, 37.46, 'e'), c('Chongjin', 129.78, 41.8, 's'), c('Wonsan', 127.43, 39.15, 'o'),
-      c('Hyesan', 128.2, 41.4, 'w'), c('Gwangju', 126.85, 35.16, 'f')],
-    deposits: [c('Musan Iron Mine', 129.2, 42.2, 's'), c('Sangdong Tungsten Mine', 128.4, 37.2, 'r')] },
+    cities: [c('Busan', 129.07, 35.18, 'f'), c('Daegu', 128.6, 35.87, 'w'), c('Incheon', 126.7, 37.46, 'e'), c('Gwangju', 126.85, 35.16, 'f')],
+    deposits: [c('Sangdong Tungsten Mine', 128.4, 37.2, 'r'), c('Taebaek Coal Mines', 128.95, 37.15, 's')] },
+  { code: 'PRK', name: 'North Korea', color: '#b0506a', tier: 'medium', n: 22, blurb: 'The Soviet-backed north: mines, heavy industry and a million men under arms.',
+    bonus: { manpower: 3500, steel: 250, money: 200 },
+    capital: c('Pyongyang', 125.75, 39.02, 's'),
+    cities: [c('Chongjin', 129.78, 41.8, 's'), c('Wonsan', 127.43, 39.15, 'o'), c('Hamhung', 127.54, 39.92, 'e'), c('Sinuiju', 124.4, 40.1, 'f'), c('Hyesan', 128.2, 41.4, 'w')],
+    deposits: [c('Musan Iron Mine', 129.2, 42.2, 's'), c('Tanchon Magnesite Mines', 128.9, 40.45, 'r')] },
   { code: 'THA', name: 'Thailand', color: '#c98f5f', tier: 'medium', n: 38, blurb: 'The only Southeast Asian kingdom never colonised: teak and tin.',
     bonus: { food: 1500, wood: 400 },
     capital: c('Bangkok', 100.5, 13.75, 'e'),
@@ -333,13 +342,23 @@ export const PLAYABLE = [
     capital: c('Caracas', -66.9, 10.5, 'f'),
     cities: [c('Maracaibo', -71.64, 10.65, 'o'), c('Maturin', -63.18, 9.75, 'o'), c('Maracay', -67.6, 10.25, 'e'), c('Valencia', -68.0, 10.18, 'f'), c('El Callao', -61.83, 7.35, 'r'), c('Ciudad Bolivar', -63.55, 8.12, 's')],
     deposits: [c('Cerro Bolivar Iron Mine', -63.5, 7.6, 's'), c('Guayana Forests', -64.0, 5.5, 'w')] },
+  { code: 'TWN', name: 'Taiwan', color: '#3f8fa8', tier: 'medium', n: 12, blurb: 'The Republic of China\'s last stronghold: an island fortress facing the mainland.',
+    bonus: { money: 400, manpower: 2500, food: 400 },
+    capital: c('Taipei', 121.52, 25.04, 'e'),
+    cities: [c('Kaohsiung', 120.31, 22.63, 's'), c('Taichung', 120.68, 24.14, 'f'), c('Tainan', 120.21, 23.0, 'f'), c('Keelung', 121.74, 25.13, 'o'), c('Hualien', 121.6, 24.0, 'w')],
+    deposits: [c('Alishan Forests', 120.8, 23.5, 'w'), c('Chinkuashih Copper Mines', 121.86, 25.1, 'r')] },
+  { code: 'ISR', name: 'Israel', color: '#6ac0e0', tier: 'medium', n: 10, blurb: 'Born in 1948 and already fought for: citrus, Negev potash and a long armistice line.',
+    bonus: { money: 300, manpower: 2000, electronics: 20 },
+    capital: c('Jerusalem', 35.21, 31.78, 'f'),
+    cities: [c('Tel Aviv', 34.78, 32.08, 'e'), c('Haifa', 34.99, 32.79, 'o'), c('Beersheba', 34.79, 31.25, 'r'), c('Eilat', 34.95, 29.56, 'w')],
+    deposits: [c('Dead Sea Potash Works', 35.4, 31.0, 'r'), c('Timna Copper Mines', 34.98, 29.78, 's')] },
 ];
 
 /**
  * How many cities (the capital included) each playable country has on the map. Super and major countries 7,
  * medium countries 6, small playable countries 3 to 5. Every other province is rural. Edit and re-run the generator.
  */
-const SMALL_CITIES = { SWE: 4, NOR: 3, FIN: 3, ROU: 4, YUG: 4, CZE: 4, IRQ: 4, KOR: 4, CHL: 3, THA: 5, MMR: 4, PHL: 5, VNM: 4, VEN: 4 };
+const SMALL_CITIES = { SWE: 4, NOR: 3, FIN: 3, ROU: 4, YUG: 4, CZE: 4, IRQ: 4, KOR: 4, PRK: 5, GDR: 4, TWN: 4, ISR: 4, CHL: 3, THA: 5, MMR: 4, PHL: 5, VNM: 4, VEN: 4 };
 export const cityTarget = (sp) => (sp.tier === 'super' || sp.tier === 'major' ? 7 : (SMALL_CITIES[sp.code] ?? 6));
 
 /** Hand-picked cities for the super and major countries (besides the capital), so the map keeps each country's real centres. */
@@ -347,11 +366,10 @@ export const KEEP_CITIES = {
   // Super and major countries: the full list (besides the capital), chosen for history and for a city near every important frontier.
   USA: ['Chicago', 'Houston', 'Los Angeles', 'Seattle', 'Denver', 'Detroit'],
   SOV: ['Petrozavodsk', 'Kiev', 'Baku', 'Tashkent', 'Novosibirsk', 'Vladivostok'],
-  CHN: ['Beijing', 'Kunming', 'Urumqi', 'Kashgar', 'Ngari', 'Harbin'],
+  CHN: ['Shanghai', 'Kunming', 'Urumqi', 'Kashgar', 'Xining', 'Harbin'],
   IND: ['Srinagar', 'Jodhpur', 'Bombay', 'Calcutta', 'Madras', 'Imphal'],
   BRA: ['Salvador', 'Manaus', 'Campo Grande', 'Porto Alegre', 'Boa Vista', 'Rio Branco'],
   FRA: ['Lille', 'Strasbourg', 'Lyon', 'Marseille', 'Toulouse', 'Bordeaux'],
-  GER: ['Hamburg', 'Cologne', 'Munich', 'Leipzig', 'Hanover', 'Essen'],
   CAN: ['Winnipeg', 'Edmonton', 'Vancouver', 'Whitehorse', 'Halifax', 'Quebec'],
   AUS: ['Brisbane', 'Perth', 'Darwin', 'Adelaide', 'Alice Springs', 'Wewak'],
   ARG: ['Cordoba', 'Mendoza', 'Salta', 'Posadas', 'Neuquen', 'Comodoro Rivadavia'],
@@ -369,7 +387,7 @@ export const KEEP_CITIES = {
 export const BORDER_CITIES = {
   PAK: [['Quetta', 66.99, 30.18, 'r'], ['Gilgit', 74.3, 35.92, 'w'], ['Dacca', 90.41, 23.81, 'f'], ['Dalbandin', 64.4, 28.89, 'f']],
   IND: [['Jodhpur', 73.02, 26.29, 'f'], ['Bikaner', 73.31, 28.02, 'f'], ['Imphal', 93.94, 24.82, 'w'], ['Leh', 77.58, 34.16, 'r'], ['Shillong', 91.88, 25.57, 'w']],
-  CHN: [['Kashgar', 75.99, 39.47, 'o'], ['Yining', 81.32, 43.91, 'f'], ['Hohhot', 111.67, 40.84, 'f'], ['Qiqihar', 123.95, 47.34, 'f'], ['Ngari', 80.1, 32.5, 'r']],
+  CHN: [['Kashgar', 75.99, 39.47, 'o'], ['Yining', 81.32, 43.91, 'f'], ['Hohhot', 111.67, 40.84, 'f'], ['Qiqihar', 123.95, 47.34, 'f'], ['Xining', 101.78, 36.62, 'r'], ['Kangding', 101.96, 30.05, 'w']],
   BRA: [['Rio Branco', -67.81, -9.97, 'w'], ['Boa Vista', -60.67, 2.82, 'f'], ['Campo Grande', -54.62, -20.46, 'f'], ['Macapa', -51.07, 0.03, 'w'], ['Foz do Iguacu', -54.59, -25.55, 'e'], ['Sao Gabriel', -67.09, -0.13, 'w']],
   USA: [['Juneau', -134.42, 58.3, 'w'], ['Fairbanks', -147.72, 64.84, 'o'], ['El Paso', -106.49, 31.76, 'f'], ['Buffalo', -78.88, 42.89, 's']],
   CAN: [['Whitehorse', -135.05, 60.72, 'r'], ['Thunder Bay', -89.25, 48.38, 'w'], ['Windsor', -83.03, 42.31, 'e']],
@@ -394,11 +412,12 @@ export const BORDER_CITIES = {
   MEX: [['Ciudad Juarez', -106.49, 31.69, 'f'], ['Nuevo Laredo', -99.51, 27.48, 'o'], ['Tapachula', -92.26, 14.9, 'f']],
   ARG: [['Jujuy', -65.3, -24.19, 'r'], ['Formosa', -58.18, -26.18, 'f'], ['Rio Gallegos', -69.22, -51.62, 'o']],
   PER: [['Tacna', -70.25, -18.01, 'f'], ['Puerto Maldonado', -69.19, -12.6, 'w']],
-  GER: [['Aachen', 6.08, 50.78, 's'], ['Passau', 13.46, 48.57, 'f']],
+  FRG: [['Aachen', 6.08, 50.78, 's'], ['Kassel', 9.5, 51.31, 'f']],
+  PRK: [['Kaesong', 126.55, 37.97, 'f'], ['Sinuiju', 124.4, 40.1, 'f']],
   POL: [['Przemysl', 22.77, 49.78, 'f'], ['Bialystok', 23.16, 53.13, 'f']],
   ROU: [['Satu Mare', 22.88, 47.79, 'f'], ['Galati', 28.04, 45.44, 's']],
-  KOR: [['Chunchon', 127.73, 37.88, 'f']],
+  KOR: [['Chunchon', 127.73, 37.88, 'f'], ['Uijongbu', 127.05, 37.74, 'f']],
 };
 
 /** Cities a smaller country must keep whatever the frontier rule says (they are why the country matters). */
-export const MUST_CITIES = { TUR: ['Karabuk'], PAK: ['Quetta', 'Gilgit', 'Lahore'], ROU: ['Ploiesti'], SAU: ['Dhahran'], IRQ: ['Basra'], IRN: ['Abadan'] };
+export const MUST_CITIES = { ISR: ['Tel Aviv', 'Haifa'], KOR: ['Chunchon'], PRK: ['Kaesong'], TUR: ['Karabuk'], PAK: ['Quetta', 'Gilgit', 'Lahore'], ROU: ['Ploiesti'], SAU: ['Dhahran'], IRQ: ['Basra'], IRN: ['Abadan'] };

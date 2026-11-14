@@ -141,7 +141,7 @@ export class CampaignsService implements OnModuleInit {
       }
       const existing = (await this.db.select({ id: campaigns.id }).from(campaigns)).filter((c) => !legacy.has(c.id));
       if (existing.length === 0) {
-        const c = await this.createCampaign('Classic Cold War 1947');
+        const c = await this.createCampaign('Classic Cold War 1950');
         this.log.log(`Created default campaign "${c.name}"`);
       }
     } catch (err) {

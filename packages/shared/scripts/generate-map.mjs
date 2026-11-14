@@ -1,6 +1,6 @@
 // Builds packages/shared/src/map-geometry.generated.ts.
 //   node packages/shared/scripts/generate-map.mjs [--debug out.svg]
-// Borders: CShapes 2.0 on 31 Dec 1947 (data/cshapes-1947.json). Cities, resources and playable countries: map-source.mjs.
+// Borders: CShapes 2.0 on 1 Jan 1950 (data/cshapes-1950.json). Cities, resources and playable countries: map-source.mjs.
 // Method: rasterise the country borders on a 0.25 degree grid, put one seed on every city and deposit, spread the other
 // provinces with k-means so each country gets its target number of provinces, give every land cell to the nearest seed
 // on the same landmass, then trace the borders once per boundary so neighbouring provinces share exactly the same edge.
@@ -39,7 +39,7 @@ const hashStr = (s) => { let h = 2166136261; for (const ch of s) h = Math.imul(h
 const slug = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
 // ---------- countries ----------
-const cs = JSON.parse(readFileSync(join(here, 'data', 'cshapes-1947.json'), 'utf8'));
+const cs = JSON.parse(readFileSync(join(here, 'data', 'cshapes-1950.json'), 'utf8'));
 const RES = { f: 'food', o: 'oil', s: 'steel', e: 'electronics', r: 'rare', w: 'wood' };
 const playableByCode = new Map(PLAYABLE.map((p) => [p.code, p]));
 const usedCodes = new Set(PLAYABLE.map((p) => p.code));
