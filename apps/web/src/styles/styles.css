@@ -493,3 +493,6 @@ button.ghost.off { opacity: 0.5; }
   pointer-events: none;
   background: radial-gradient(ellipse at 50% 45%, transparent 58%, rgba(2, 6, 10, 0.6) 100%);
 }
+
+/* Shown over the map when WebGL cannot start. */
+.map-error { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 460px; width: calc(100% - 32px); z-index: 20; }

@@ -339,6 +339,8 @@ export function WorldMap({
   onFrontHoverRef.current = onFrontHover;
   frontTargetRef.current = frontTarget;
   const [ready, setReady] = useState(false);
+  /** Set when the browser cannot start WebGL, so the player sees why the map is empty. */
+  const [mapError, setMapError] = useState<string | null>(null);
 
   // Create the Pixi application once.
   useEffect(() => {
@@ -1157,6 +1159,11 @@ export function WorldMap({
           },
         };
         setReady(true);
+      })
+      .catch((err: unknown) => {
+        // WebGL could not start (disabled, blocked after a GPU crash, or too many open tabs with maps).
+        console.error('Map renderer failed to start', err);
+        if (!disposed) setMapError((err as Error)?.message ?? String(err));
       });
 
     return () => {
@@ -1323,5 +1330,23 @@ export function WorldMap({
     }
   }, [ready, provinces, formations, frontTarget, myCountryId]);
 
-  return <div ref={hostRef} className="map-host" />;
+  return (
+    <>
+      <div ref={hostRef} className="map-host" />
+      {mapError && (
+        <div className="map-error card" role="alert">
+          <h3>The map could not start</h3>
+          <p className="small">
+            Your browser refused to start WebGL graphics, which the map needs. Usually this clears up if you close every tab of the game,
+            fully restart the browser, and open it again. Also check that hardware acceleration is on (Chrome: Settings, System, Use graphics
+            acceleration) and try another browser if it persists.
+          </p>
+          <p className="muted small">Details: {mapError}</p>
+          <button className="primary" onClick={() => window.location.reload()}>
+            Reload
+          </button>
+        </div>
+      )}
+    </>
+  );
 }
