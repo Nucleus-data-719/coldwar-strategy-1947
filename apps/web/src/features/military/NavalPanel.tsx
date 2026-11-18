@@ -10,6 +10,7 @@ import {
   hasPort,
   nodeAtProgress,
   pathLength,
+  pathKm,
   portNodes,
   seaPathNodes,
   seaRange,
@@ -94,7 +95,7 @@ export function NavalPanel({ campaignId, state, formation, dest, seaDest, enemyI
     if (!path) return { kind, path: null, seconds: 0, problem: 'No sea route there.' };
     if (kind === 'attack') path = firingPosition(path, goal, range);
     if (path.length === 1 && kind === 'sail') return { kind, path: null, seconds: 0, problem: 'The fleet is already there.' };
-    const seconds = speed > 0 ? voyageSeconds(pathLength(path), speed, state.campaign.gameSpeed) : 0;
+    const seconds = speed > 0 ? voyageSeconds(pathKm(path), speed, state.campaign.gameSpeed) : 0;
     return { kind, path, seconds, problem };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dest, seaDest, enemy?.id, enemy?.node, here, speed, range, formation.provinceKey, state.provinces]);

@@ -10,6 +10,7 @@ import {
   minelayerCount,
   planAiFleetTarget,
   planAiPatrol,
+  nearestAirbase,
   portNodes,
   seaNeighbors,
   spend,
@@ -75,6 +76,8 @@ export class AiForcesService {
       : [];
     const airbaseProvince = specials.find((b) => b.type === 'airbase')?.provinceId;
     const harborProvince = specials.find((b) => b.type === 'harbor')?.provinceId;
+    const airbaseKeys = new Set(specials.filter((b) => b.type === 'airbase').map((b) => keyById.get(b.provinceId)!).filter(Boolean));
+    const ownerByKey = new Map(provs.map((p) => [p.key, p.ownerCountryId]));
     const count = (cat: 'air' | 'naval') => mine.reduce((s, f) => s + unitsOf(f.id).filter((u) => UNITS[u.unitType].category === cat).reduce((n, u) => n + u.count, 0), 0);
     for (const buy of aiPurchases({
       atWar: true,
@@ -121,7 +124,9 @@ export class AiForcesService {
           continue;
         }
         if (f.moveArrivesAt || airOrders >= MAX_AIR_ORDERS) continue;
-        const plan = planAiPatrol({ baseKey: here, units: air, enemyPower, enemyProvinces: enemyProvinceKeys });
+        // Range is measured from the nearest own airbase, as for players (see airOrderProblem).
+        const base = nearestAirbase(here, country.id, ownerByKey, airbaseKeys) ?? here;
+        const plan = planAiPatrol({ baseKey: base, units: air, enemyPower, enemyProvinces: enemyProvinceKeys });
         if (!plan) continue;
         const all = unitsOf(f.id);
         const onlyAir = all.every((u) => UNITS[u.unitType].category === 'air');

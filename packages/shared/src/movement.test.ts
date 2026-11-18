@@ -12,13 +12,13 @@ const baseCtx = { countryId: ME, ownerByKey: usa, atWarWith: new Set<string>(), 
 
 describe('movement', () => {
   it('speed is the slowest unit, 0 when empty', () => {
-    expect(formationSpeed([{ unitType: 'infantry', count: 5 }])).toBe(1);
+    expect(formationSpeed([{ unitType: 'infantry', count: 5 }])).toBe(8);
     expect(
       formationSpeed([
         { unitType: 'infantry', count: 5 },
         { unitType: 'artillery', count: 2 },
       ]),
-    ).toBeLessThan(1);
+    ).toBeLessThan(8);
     expect(formationSpeed([])).toBe(0);
   });
 
@@ -39,11 +39,13 @@ describe('movement', () => {
     const slow = planRoute('washington', 'chicago', baseCtx)!;
     const mid = slow.path[1];
     const one = planRoute('washington', 'chicago', { ...baseCtx, railwayKeys: new Set([mid]) })!;
-    // the two legs touching the railway province take 75% (half the leg is by rail), the rest are unchanged
+    // the two legs touching the railway province are quicker (half of each goes by troop train), the rest are unchanged
     expect(one.totalSeconds < slow.totalSeconds).toBe(true);
     expect(one.path.join()).toBe(slow.path.join());
-    expect(Math.abs(one.legSeconds[0] - slow.legSeconds[0] * 0.75) <= 1).toBe(true);
-    expect(Math.abs(one.legSeconds[1] - slow.legSeconds[1] * 0.75) <= 1).toBe(true);
+    expect(one.legSeconds[0]).toBeLessThan(slow.legSeconds[0]);
+    expect(one.legSeconds[1]).toBeLessThan(slow.legSeconds[1]);
+    expect(one.legSeconds[0]).toBeGreaterThan(slow.legSeconds[0] * 0.5);
+    for (let i = 2; i < slow.legSeconds.length; i++) expect(one.legSeconds[i]).toBe(slow.legSeconds[i]);
   });
 
   it('railways halve a leg and faster units arrive sooner', () => {
@@ -74,7 +76,7 @@ describe('movement', () => {
       railwayKeys: new Set<string>(),
     };
     // Server comes back long after the whole journey.
-    expect(advanceMovement({ ...input, now: start + 10 * 3600 * 1000 })).toEqual({
+    expect(advanceMovement({ ...input, now: start + 10_000 * 3600 * 1000 })).toEqual({
       status: 'arrived',
       locationKey: route.path.at(-1),
     });

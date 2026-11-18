@@ -1,7 +1,8 @@
 import { UNITS } from './game-data/units';
 import { TUNING, seededRandom } from './combat';
 import { SEA_DOTS, portNodes, seaNeighbors, PROVINCE_BY_KEY, type Point } from './map-data';
-import { MAP_UNITS_PER_PROVINCE } from './movement';
+import { moveHours } from './movement';
+import { polylineKm } from './geo';
 import type { PartialResources, UnitType } from './types';
 
 type Units = { unitType: UnitType; count: number }[];
@@ -107,10 +108,12 @@ export function pathLength(nodes: readonly number[]): number {
   return n;
 }
 
-/** Seconds a fleet needs to sail a line of dots. */
-export function voyageSeconds(lengthUnits: number, speed: number, gameSpeed: number): number {
-  const hours = lengthUnits / MAP_UNITS_PER_PROVINCE / speed;
-  return Math.max(1, Math.round((hours * 3600) / gameSpeed));
+/** Length of a line of dots in km. */
+export const pathKm = (nodes: readonly number[]): number => polylineKm(nodes.map((n) => SEA_DOTS[n]));
+
+/** Seconds a fleet needs to sail `km` (see pathKm) at its speed in km/h. */
+export function voyageSeconds(km: number, speed: number, gameSpeed: number): number {
+  return Math.max(1, Math.round((moveHours(km, speed) * 3600) / gameSpeed));
 }
 
 /** The line a voyage draws: from the province the ship leaves (if any), along the dots, into the port it reaches (if any). */

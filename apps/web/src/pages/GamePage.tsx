@@ -9,7 +9,7 @@ import { EconomyPanel } from '../features/economy/EconomyPanel';
 import { Crest, Icon, type IconName } from '../components/Icon';
 import { Flag } from '../components/art';
 import { Tutorial, isTutorialDismissed, type StepId } from '../features/tutorial/Tutorial';
-import { SUPPLY_PENALTY_PERCENT, UNITS, type FormationDto } from '@cw/shared';
+import { SUPPLY_PENALTY_PERCENT, UNITS, isAirFormation, type FormationDto } from '@cw/shared';
 import { SoundControls } from '../components/SoundControls';
 import { playSfx, sfxForNotification } from '../services/audio';
 import { verdict } from '../features/military/BattlesPanel';
@@ -432,6 +432,7 @@ export function GamePage({ campaignId, onLeave, onLogout }: Props) {
                 previewPath={previewPath}
                 previewPatrol={previewPatrol}
                 previewNaval={!!moveFormation && navalMode}
+                previewAir={!!moveFormation && isAirFormation(moveFormation.units)}
                 enemies={state.enemies}
                 mines={state.mines}
                 onEnemyClick={clickEnemy}

@@ -7,8 +7,10 @@ describe('air patrol', () => {
   it('only air forces can patrol, and the shortest range wins', () => {
     expect(isAirFormation([{ unitType: 'fighter', count: 2 }])).toBe(true);
     expect(isAirFormation([{ unitType: 'fighter', count: 2 }, { unitType: 'infantry', count: 1 }])).toBe(false);
-    expect(patrolRadius([{ unitType: 'fighter', count: 2 }])).toBe(100);
-    expect(patrolRadius([{ unitType: 'fighter', count: 2 }, { unitType: 'bomber', count: 1 }])).toBe(80);
+    const fighter = patrolRadius([{ unitType: 'fighter', count: 2 }]);
+    const bomber = patrolRadius([{ unitType: 'bomber', count: 1 }]);
+    expect(fighter).toBeGreaterThan(bomber);
+    expect(patrolRadius([{ unitType: 'fighter', count: 2 }, { unitType: 'bomber', count: 1 }])).toBe(bomber);
     expect(patrolRadius([{ unitType: 'infantry', count: 4 }])).toBe(0);
   });
 

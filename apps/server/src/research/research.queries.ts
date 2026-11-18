@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { summariseResearch, type ResearchStateDto, type ResearchSummary } from '@cw/shared';
+import { startingTechs, summariseResearch, type ResearchStateDto, type ResearchSummary } from '@cw/shared';
 import type { DbOrTx } from '../db/db.module';
-import { buildings, provinces, research } from '../db/schema';
+import { buildings, countries, provinces, research } from '../db/schema';
 
 export interface ResearchInfo {
   done: string[];
@@ -11,15 +11,16 @@ export interface ResearchInfo {
 
 /** A country's finished techs, the running project, and what they add up to. */
 export async function loadResearch(db: DbOrTx, countryId: string): Promise<ResearchInfo> {
-  const rows = await db.select().from(research).where(eq(research.countryId, countryId));
-  const done = rows.filter((r) => r.status === 'done').map((r) => r.techId);
+  // Laboratories and universities count only in provinces you hold and that are not occupied.
+  const [rows, owned, [country]] = await Promise.all([
+    db.select().from(research).where(eq(research.countryId, countryId)),
+    db.select({ id: provinces.id, disruptedUntil: provinces.disruptedUntil }).from(provinces).where(eq(provinces.ownerCountryId, countryId)),
+    db.select({ code: countries.code }).from(countries).where(eq(countries.id, countryId)),
+  ]);
+  // What the country already had on 1 January 1950 counts as researched from the start.
+  const done = [...new Set([...startingTechs(country?.code), ...rows.filter((r) => r.status === 'done').map((r) => r.techId)])];
   const running = rows.find((r) => r.status === 'active');
 
-  // Laboratories and universities count only in provinces you hold and that are not occupied.
-  const owned = await db
-    .select({ id: provinces.id, disruptedUntil: provinces.disruptedUntil })
-    .from(provinces)
-    .where(eq(provinces.ownerCountryId, countryId));
   const usable = owned.filter((p) => !p.disruptedUntil).map((p) => p.id);
   let labs = 0;
   let universities = 0;

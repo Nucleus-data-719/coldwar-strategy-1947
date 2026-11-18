@@ -1,5 +1,11 @@
 import { RESEARCH_LAB_BONUS, RESEARCH_SPEED_CAP, TECH_BY_ID, BASE_UNLOCKED_UNITS, UNIVERSITY_BONUS } from './game-data/research';
+import { STARTING_TECHS_BY_TIER } from './game-data/era';
+import { COUNTRY_BY_CODE } from './map-data';
 import type { UnitType } from './types';
+
+/** Techs a country of this code already had on 1 January 1950 (see STARTING_TECHS_BY_TIER). */
+export const startingTechs = (countryCode: string | undefined): string[] =>
+  STARTING_TECHS_BY_TIER[COUNTRY_BY_CODE[countryCode ?? '']?.tier ?? 'minor'] ?? [];
 
 export interface ResearchSummary {
   labs: number;

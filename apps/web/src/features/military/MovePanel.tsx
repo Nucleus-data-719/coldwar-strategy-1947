@@ -9,11 +9,14 @@ import {
   isAirFormation,
   isNavalFormation,
   restPoint,
-  patrolDistance,
+  airOrderProblem,
+  airRadiusKm,
+  isSealiftLeg,
   patrolFlightSeconds,
   patrolRadius,
-  PATROL_MAX_FLIGHT,
   planRoute,
+  provinceKm,
+  AMPHIBIOUS_ASSAULT_PERCENT,
   type FormationDto,
   type GameState,
   type UnitType,
@@ -74,13 +77,31 @@ export function MovePanel({ campaignId, state, formation, dest, destPoint = null
       ),
     [state.provinces],
   );
+  const workingKeys = (type: string) =>
+    new Set(state.provinces.filter((p) => p.buildings.some((b) => b.type === type && b.status === 'complete' && b.damage < 50)).map((p) => p.key));
+  const harborKeys = useMemo(() => workingKeys('harbor'), [state.provinces]); // eslint-disable-line react-hooks/exhaustive-deps
+  const airbaseKeys = useMemo(() => workingKeys('airbase'), [state.provinces]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const airOnly = !moving && isAirFormation(sendUnits.filter((u) => u.count > 0));
+  const flying = isAirFormation(sendUnits.filter((u) => u.count > 0));
+  const airOnly = !moving && flying;
   const [mode, setMode] = useState<'attack' | 'patrol'>('attack');
   const patrolling = airOnly && mode === 'patrol';
   const radius = patrolRadius(sendUnits.filter((u) => u.count > 0));
-  const flightDistance = dest ? patrolDistance(startKey, dest) : 0;
-  const tooFar = patrolling && flightDistance > PATROL_MAX_FLIGHT;
+  const rangeKm = airRadiusKm(sendUnits);
+  // 1950s air rules (same check as the server): combat radius from an airbase, rebasing only to your own airbases.
+  const airProblem =
+    flying && dest && dest !== startKey
+      ? airOrderProblem({
+          kind: patrolling ? 'patrol' : ownerByKey.get(dest) === state.me.countryId ? 'rebase' : 'strike',
+          fromKey: startKey,
+          toKey: dest,
+          units: sendUnits,
+          countryId: state.me.countryId,
+          ownerByKey,
+          airbaseKeys,
+        })
+      : null;
+  const tooFar = patrolling && !!airProblem;
   const flightSeconds = dest && speed > 0 ? patrolFlightSeconds(startKey, dest, speed, state.campaign.gameSpeed) : 0;
 
   // Ordering troops into a country you are not at war with declares war on it, shown in red before you confirm.
@@ -97,15 +118,20 @@ export function MovePanel({ campaignId, state, formation, dest, destPoint = null
             ownerByKey,
             atWarWith: new Set(warTarget ? [...state.atWarWith, warTarget] : state.atWarWith),
             railwayKeys,
+            harborKeys,
             speed,
             gameSpeed: state.campaign.gameSpeed,
             coastalOnly: isNavalFormation(sendUnits),
             useRoads: !isNavalFormation(sendUnits) && canOccupyLand(sendUnits),
+            air: flying,
+            units: sendUnits,
           })
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dest, startKey, speed, ownerByKey, state.atWarWith, railwayKeys, state.me.countryId, state.campaign.gameSpeed, patrolling, warTarget],
+    [dest, startKey, speed, ownerByKey, state.atWarWith, railwayKeys, harborKeys, state.me.countryId, state.campaign.gameSpeed, patrolling, warTarget, flying, JSON.stringify(sendUnits)],
   );
+  const landForce = !isNavalFormation(sendUnits) && canOccupyLand(sendUnits);
+  const sealift = !!route && landForce && route.path.length === 2 && isSealiftLeg(route.path[0], route.path[1]);
 
   const previewKey = patrolling ? (dest && dest !== startKey ? `${startKey}>${dest}` : '') : route ? route.path.join('>') : sameProvincePoint ? startKey : '';
   const attackKeysNow = route ? route.path.filter((k) => ownerByKey.get(k) !== state.me.countryId) : [];
@@ -253,7 +279,13 @@ export function MovePanel({ campaignId, state, formation, dest, destPoint = null
           fighters. Over friendly land only enemies are hurt.
         </p>
       )}
-      {tooFar && <p className="error small">Too far for these aircraft. Patrol closer to where they are based.</p>}
+      {flying && (
+        <p className="muted small">
+          Combat radius <strong>{rangeKm} km</strong> from your nearest airbase. Clicking one of your own airbases rebases the aircraft there
+          (up to {Math.round(rangeKm * 2.5)} km in one hop).
+        </p>
+      )}
+      {airProblem && <p className="error small">{airProblem}</p>}
       {patrolling && dest && !tooFar && !sameSpot && (
         <p>
           Flight time <strong>{formatDuration(flightSeconds)}</strong>
@@ -275,9 +307,19 @@ export function MovePanel({ campaignId, state, formation, dest, destPoint = null
       {warTarget && route && (
         <p className="error small">⚔ This order declares war on {warTargetName}. The army marches in and fights when it arrives.</p>
       )}
-      {!patrolling && dest && !sameSpot && !route && (
+      {!patrolling && dest && !sameSpot && !route && !flying && (
         <p className="error small">
-          No road leads to {PROVINCE_BY_KEY[dest]?.name} from here. Pick a province that is joined to your army by road.
+          No road leads to {PROVINCE_BY_KEY[dest]?.name} from here. Pick a province joined to your army by road, or move the army to one
+          of your harbours first: from there it can sail to any port.
+        </p>
+      )}
+      {sealift && route && (
+        <p className="small">
+          ⚓ Sealift: the troops embark in {PROVINCE_BY_KEY[route.path[0]]?.name} and sail about{' '}
+          {Math.round(provinceKm(route.path[0], route.path[1]))} km to {PROVINCE_BY_KEY[route.path[1]]?.name}.
+          {attackKeys.length > 0 && (
+            <span className="warn"> Amphibious assault: they fight at {AMPHIBIOUS_ASSAULT_PERCENT}% when they land.</span>
+          )}
         </p>
       )}
       {!patrolling && route && attackKeys.length > 0 && (
@@ -304,7 +346,7 @@ export function MovePanel({ campaignId, state, formation, dest, destPoint = null
         disabled={
           patrolling
             ? !dest || tooFar || sendTotal === 0 || patrol.isPending
-            : !(route || sameProvincePoint) || sameSpot || wrongKind || sendTotal === 0 || move.isPending
+            : !(route || sameProvincePoint) || sameSpot || wrongKind || !!airProblem || sendTotal === 0 || move.isPending
         }
         onClick={() => {
           setError(null);

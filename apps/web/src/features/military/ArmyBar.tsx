@@ -12,6 +12,7 @@ import {
   planRoute,
   type FormationDto,
   type GameState,
+  isAirFormation,
 } from '@cw/shared';
 import { api } from '../../services/api';
 import { UnitIcon } from '../../components/art';
@@ -104,6 +105,8 @@ export function ArmyBar({ campaignId, state, formation: f, active, onOrder, onSp
       gameSpeed: state.campaign.gameSpeed,
       coastalOnly: isNavalFormation(f.units),
       useRoads: !isNavalFormation(f.units) && canOccupyLand(f.units),
+      air: isAirFormation(f.units),
+      units: f.units,
     });
     return r?.totalSeconds ?? 0;
   }, [m, finalKey, speed, ownerByKey, railwayKeys, state.atWarWith, state.me.countryId, state.campaign.gameSpeed, f.units]);

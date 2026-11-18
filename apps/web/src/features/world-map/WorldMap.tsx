@@ -27,6 +27,7 @@ import {
   BUILDINGS,
   type StateCountry,
   type StateProvince,
+  isAirFormation,
 } from '@cw/shared';
 
 export type MapMode = 'political' | 'resources' | 'terrain' | 'supply' | 'diplomacy';
@@ -110,6 +111,8 @@ interface Props {
   onFrontHover?: (countryId: string | null) => void;
   /** The previewed route is a sea route (ships follow the dots). */
   previewNaval?: boolean;
+  /** The route being planned is an air order (drawn straight). */
+  previewAir?: boolean;
   /** Circle of an air patrol being planned. */
   previewPatrol?: { key: string; radius: number } | null;
   /** Diplomacy overlay: relation stage of each country towards you (allied, friendly, neutral, ...). */
@@ -263,6 +266,7 @@ export function WorldMap({
   clockOffsetMs,
   previewPath,
   previewNaval,
+  previewAir,
   previewPatrol,
   relationByCountry,
   supplyShort,
@@ -289,6 +293,7 @@ export function WorldMap({
   const offsetRef = useRef(clockOffsetMs);
   const previewRef = useRef(previewPath);
   const previewNavalRef = useRef(previewNaval);
+  const previewAirRef = useRef(!!previewAir);
   const previewPatrolRef = useRef(previewPatrol);
   const previewPointRef = useRef(previewPoint);
   const previewHostileRef = useRef(previewHostile);
@@ -328,6 +333,7 @@ export function WorldMap({
   offsetRef.current = clockOffsetMs;
   previewRef.current = previewPath;
   previewNavalRef.current = previewNaval;
+  previewAirRef.current = !!previewAir;
   previewPointRef.current = previewPoint;
   previewHostileRef.current = previewHostile;
   onFrontHoverRef.current = onFrontHover;
@@ -765,7 +771,7 @@ export function WorldMap({
 
           const preview = previewRef.current;
           if (preview && preview.length > 0) {
-            const line = routePolyline(preview, !!previewNavalRef.current);
+            const line = routePolyline(preview, !!previewNavalRef.current, previewAirRef.current);
             routeG.moveTo(line[0][0], line[0][1]);
             for (const [x, y] of line.slice(1)) routeG.lineTo(x, y);
             const hostile = !!previewHostileRef.current;
@@ -911,18 +917,19 @@ export function WorldMap({
               }
             } else if (m) {
               const naval = formationClass(f.units) === 'naval';
+              const air = isAirFormation(f.units);
               const start = Date.parse(m.startedAt);
               const end = Date.parse(m.arrivesAt);
               const held = !!m.holdUntil && Date.parse(m.holdUntil) > now;
               const t = held ? (m.holdFraction ?? 0) : end > start ? Math.min(1, Math.max(0, (now - start) / (end - start))) : 1;
-              const { at, rest } = splitAt(legPolyline(f.provinceKey, m.toKey, naval), t);
+              const { at, rest } = splitAt(legPolyline(f.provinceKey, m.toKey, naval, air), t);
               x = at[0];
               y = at[1];
               // Dashed look: the route ahead is drawn as short gold segments with an arrow head at the end.
               const line = [...rest];
               let from = m.toKey;
               for (const key of m.remainingKeys) {
-                line.push(...legPolyline(from, key, naval).slice(1));
+                line.push(...legPolyline(from, key, naval, air).slice(1));
                 from = key;
               }
               const pts = line.map(([px, py]) => ({ x: px, y: py }));

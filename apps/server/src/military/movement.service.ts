@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { and, eq, isNotNull, lt, lte } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lt, lte } from 'drizzle-orm';
 import {
   PROVINCE_BY_KEY,
   UNITS,
@@ -8,9 +8,10 @@ import {
   isNavalFormation,
   planRoute,
   canOccupyLand,
-  PATROL_MAX_FLIGHT,
+  airOrderProblem,
   isAirFormation,
-  patrolDistance,
+  isSealiftLeg,
+  nearestAirbase,
   patrolFlightSeconds,
   type UnitType,
 } from '@cw/shared';
@@ -36,12 +37,17 @@ import { mergeIdleAt } from './merge';
 
 /** Land forces move along roads; ships and aircraft are not bound to them. */
 const usesRoads = (units: { unitType: UnitType; count: number }[]) => !isNavalFormation(units) && canOccupyLand(units);
+/** Pure air forces fly straight from airbase to target. */
+const flies = (units: { unitType: UnitType; count: number }[]) => isAirFormation(units);
 
 interface MapContext {
   keyById: Map<string, string>;
   idByKey: Map<string, string>;
   ownerByKey: Map<string, string>;
   railwayKeys: Set<string>;
+  /** Provinces with a working harbour (sealift) and airbase (aircraft), any owner. */
+  harborKeys: Set<string>;
+  airbaseKeys: Set<string>;
 }
 
 /**
@@ -70,12 +76,20 @@ export class MovementService {
     const keyById = new Map(rows.map((r) => [r.id, r.key]));
     const idByKey = new Map(rows.map((r) => [r.key, r.id]));
     const ownerByKey = new Map(rows.map((r) => [r.key, r.owner]));
-    const rails = await tx
-      .select({ provinceId: buildings.provinceId })
+    const working = await tx
+      .select({ provinceId: buildings.provinceId, type: buildings.type })
       .from(buildings)
-      .where(and(eq(buildings.campaignId, campaignId), eq(buildings.type, 'railway'), eq(buildings.status, 'complete'), lt(buildings.damage, 50)));
-    const railwayKeys = new Set(rails.map((r) => keyById.get(r.provinceId)).filter((k): k is string => !!k));
-    return { keyById, idByKey, ownerByKey, railwayKeys };
+      .where(
+        and(
+          eq(buildings.campaignId, campaignId),
+          inArray(buildings.type, ['railway', 'harbor', 'airbase']),
+          eq(buildings.status, 'complete'),
+          lt(buildings.damage, 50),
+        ),
+      );
+    const keysOf = (type: string) =>
+      new Set(working.filter((r) => r.type === type).map((r) => keyById.get(r.provinceId)).filter((k): k is string => !!k));
+    return { keyById, idByKey, ownerByKey, railwayKeys: keysOf('railway'), harborKeys: keysOf('harbor'), airbaseKeys: keysOf('airbase') };
   }
 
   /** Splits the chosen units off into a new formation in the same province. Returns the formation to move. */
@@ -204,21 +218,40 @@ export class MovementService {
       return { formationId: target.id, etaSeconds: 0 };
     }
 
+    const air = flies(units);
+    if (air) {
+      // 1950s air rules: strike within combat radius of an airbase, rebase only to your own airbases.
+      const problem = airOrderProblem({
+        kind: ctx.ownerByKey.get(destKey) === country.id ? 'rebase' : 'strike',
+        fromKey: startKey,
+        toKey: destKey,
+        units,
+        countryId: country.id,
+        ownerByKey: ctx.ownerByKey,
+        airbaseKeys: ctx.airbaseKeys,
+      });
+      if (problem) throw new BadRequestException(problem);
+    }
     const route = planRoute(startKey, destKey, {
       countryId: country.id,
       ownerByKey: ctx.ownerByKey,
       atWarWith: await this.wars.enemiesOf(tx, country.id),
       railwayKeys: ctx.railwayKeys,
+      harborKeys: ctx.harborKeys,
       speed,
       gameSpeed: env.GAME_SPEED,
       coastalOnly: isNavalFormation(units),
       useRoads: usesRoads(units),
+      air,
+      units,
     });
     if (!route) {
       throw new BadRequestException(
         isNavalFormation(units)
           ? 'No sea route. Ships can only sail between coastal provinces.'
-          : 'No route. Land forces travel only along roads, across your own land and the land of countries you are at war with. Declare war first to attack.',
+          : air
+            ? 'Aircraft can only strike countries you are at war with, or rebase to your own airbases.'
+            : 'No route. Land forces travel along roads across your own land and the land of countries you are at war with, or sail from one of your harbours to a port. Declare war first to attack.',
       );
     }
 
@@ -297,7 +330,16 @@ export class MovementService {
     if (!isAirFormation(units)) throw new BadRequestException('Only aircraft can patrol. Send the aircraft as a separate force.');
 
     const startKey = ctx.keyById.get(target.provinceId)!;
-    if (patrolDistance(startKey, destKey) > PATROL_MAX_FLIGHT) throw new BadRequestException('Too far for these aircraft. Patrol closer to where they are based.');
+    const problem = airOrderProblem({
+      kind: 'patrol',
+      fromKey: startKey,
+      toKey: destKey,
+      units,
+      countryId: country.id,
+      ownerByKey: ctx.ownerByKey,
+      airbaseKeys: ctx.airbaseKeys,
+    });
+    if (problem) throw new BadRequestException(problem);
     const now = new Date();
     if (startKey === destKey) {
       await tx.update(formations).set({ patrolActive: true, patrolSince: now, patrolSettledAt: now, movePatrol: false }).where(eq(formations.id, target.id));
@@ -366,8 +408,28 @@ export class MovementService {
         .for('update');
       if (!formation || formation.countryId !== country.id) throw new NotFoundException('Army not found');
       if (formation.patrolActive && !formation.moveArrivesAt) {
-        // End the patrol: the aircraft stay where they are.
-        await tx.update(formations).set({ patrolActive: false, patrolSince: null, patrolSettledAt: null }).where(eq(formations.id, formation.id));
+        // End the patrol: the aircraft fly home to the nearest airbase of yours, or stay put when there is none.
+        const ctx = await this.loadContext(tx, campaignId);
+        const hereKey = ctx.keyById.get(formation.provinceId)!;
+        const home = nearestAirbase(hereKey, country.id, ctx.ownerByKey, ctx.airbaseKeys);
+        const ended = { patrolActive: false, patrolSince: null, patrolSettledAt: null };
+        if (!home || home === hereKey) {
+          await tx.update(formations).set(ended).where(eq(formations.id, formation.id));
+          return;
+        }
+        const units = await tx.select().from(formationUnits).where(eq(formationUnits.formationId, formation.id));
+        const now = Date.now();
+        await tx
+          .update(formations)
+          .set({
+            ...ended,
+            moveNextProvinceId: ctx.idByKey.get(home)!,
+            movePath: [],
+            moveStartedAt: new Date(now),
+            moveArrivesAt: new Date(now + patrolFlightSeconds(hereKey, home, formationSpeed(units), env.GAME_SPEED) * 1000),
+            movePatrol: false,
+          })
+          .where(eq(formations.id, formation.id));
         return;
       }
       if (formation.movePatrol) {
@@ -477,6 +539,8 @@ export class MovementService {
         railwayKeys: ctx.railwayKeys,
         useRoads: usesRoads(units),
         coastalOnly: isNavalFormation(units),
+        air: flies(units),
+        units,
       });
 
     let result = step(
@@ -514,6 +578,8 @@ export class MovementService {
         defender,
         province,
         arrivedAt: result.arrivedAt,
+        // Land troops that sailed straight into an enemy port fight an amphibious assault.
+        amphibious: usesRoads(units) && isSealiftLeg(result.locationKey, result.targetKey),
       });
       notes.push(...outcome.notes);
       fought = true;

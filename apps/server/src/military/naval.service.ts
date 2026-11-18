@@ -23,6 +23,7 @@ import {
   navalEngagement,
   nodeAtProgress,
   pathLength,
+  pathKm,
   portNodes,
   seaPathNodes,
   startNodeFromPort,
@@ -108,7 +109,7 @@ export class NavalService {
 
   private async setVoyage(tx: DbOrTx, f: FormationRow, path: number[], units: Units, destProvinceId: string | null, attackTargetId: string | null) {
     const now = Date.now();
-    const secs = path.length > 1 ? voyageSeconds(pathLength(path), formationSpeed(units), env.GAME_SPEED) : 1;
+    const secs = path.length > 1 ? voyageSeconds(pathKm(path), formationSpeed(units), env.GAME_SPEED) : 1;
     await tx
       .update(formations)
       .set({

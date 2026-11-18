@@ -59,7 +59,7 @@ const STEPS: StepDef[] = [
     id: 'air',
     title: 'Patrol with aircraft',
     optional: true,
-    how: 'Research Fighters, build an Airbase, and produce aircraft. Select the aircraft, press Move, switch the panel to Patrol and click a province. They circle there and wear down enemy armies and buildings inside the circle (they take some losses over enemy land).',
+    how: 'Research Fighters, build an Airbase, and produce aircraft. Select the aircraft, press Move, switch the panel to Patrol and click a province. They circle there and wear down enemy armies and buildings inside the circle (they take some losses over enemy land). The patrol must lie within combat radius of one of your airbases (jet fighters about 700 km, bombers 2,500 km).',
   },
   {
     id: 'sea',

@@ -6,6 +6,7 @@ import {
   OCCUPATION_DISRUPTION_SECONDS,
   CAPITAL_DEFENSE,
   explainBattle,
+  AMPHIBIOUS_ASSAULT_PERCENT,
   airModifiers,
   canOccupyLand,
   generalModifiers,
@@ -89,6 +90,8 @@ export class CombatService {
       defender: CountryRow;
       province: ProvinceRow;
       arrivedAt: number;
+      /** The attackers landed from the sea (a sealift into an enemy port). */
+      amphibious?: boolean;
     },
   ): Promise<AttackOutcome> {
     const { formation, attacker, defender, province } = a;
@@ -140,6 +143,7 @@ export class CombatService {
       provinceDefense: province.defense,
       attackerModifiers: [
         ...(await researchMods(attacker, 'attacker')),
+        ...(a.amphibious ? [{ side: 'attacker' as const, label: 'Amphibious landing', percent: AMPHIBIOUS_ASSAULT_PERCENT }] : []),
         ...airModifiers('attacker', attackerBefore, defenderBefore),
         ...generalModifiers('attacker', attGenerals.map((g) => toDeployed(g, attackerBefore)), a.arrivedAt),
         ...(await supplyMods(attacker, attackerBalance, 'attacker')),

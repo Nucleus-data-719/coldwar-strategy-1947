@@ -47,7 +47,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   harbor: {
     type: 'harbor',
     name: 'Harbor',
-    description: 'Coastal only. Builds submarines, corvettes, destroyers, cruisers and battleships once they are researched.',
+    description: 'Coastal only. Builds submarines, corvettes, destroyers, cruisers and battleships once they are researched. Land troops standing here can sail to any port (sealift), an enemy port too (amphibious assault).',
     cost: { wood: 120, money: 600, steel: 150 },
     buildSeconds: 5400,
     requiresCoastal: true,
@@ -56,7 +56,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   airbase: {
     type: 'airbase',
     name: 'Airbase',
-    description: 'Builds fighters, bombers and air support aircraft once they are researched.',
+    description: 'Builds jet fighters, bombers and fighter-bombers once they are researched. Aircraft are based at airbases: strikes and patrols must lie within their combat radius of one.',
     cost: { wood: 80, money: 900, steel: 250, oil: 50 },
     buildSeconds: 7200,
     effectActive: true,
@@ -89,7 +89,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   railway: {
     type: 'railway',
     name: 'Railway',
-    description: 'Doubles army speed inside this province, on every road that crosses it. Build it at both ends of a road to halve the whole trip.',
+    description: 'Troop trains carry every unit, tanks and guns too, at 30 km/h across this province, ignoring terrain. Build it at both ends of a road to rail the whole trip.',
     cost: { wood: 80, money: 300, steel: 120 },
     buildSeconds: 3600,
     effectActive: true,

@@ -1,5 +1,5 @@
 import { UNITS } from './game-data/units';
-import { PATROL_MAX_FLIGHT, patrolDistance, patrolRadius, provincesInCircle } from './patrol';
+import { airRadiusKm, patrolDistance, patrolRadius, provincesInCircle } from './patrol';
 import { unitPower, type StackUnit } from './ai-war';
 import type { UnitType } from './types';
 
@@ -9,7 +9,7 @@ export const AI_PATROL_MIN_POWER = 3 * unitPower([{ unitType: 'infantry', count:
 export const AI_FLEET_RATIO = 1.3;
 
 /**
- * Where should these aircraft patrol? The circle centre (within flying range of `baseKey`) that holds the most
+ * Where should these aircraft patrol? The circle centre (within the combat radius of the airbase `baseKey`) that holds the most
  * enemy power, with a small discount for every enemy province in it (their air defence shoots back).
  * Null when nothing is worth flying to.
  */
@@ -22,12 +22,13 @@ export function planAiPatrol(input: {
   enemyProvinces: ReadonlySet<string>;
 }): { centerKey: string; power: number } | null {
   const radius = patrolRadius(input.units);
+  const reachKm = airRadiusKm(input.units);
   if (radius <= 0) return null;
   let best: { centerKey: string; power: number; score: number } | null = null;
   const candidates = new Set<string>();
   for (const key of input.enemyPower.keys()) candidates.add(key);
   for (const centre of candidates) {
-    if (patrolDistance(input.baseKey, centre) > PATROL_MAX_FLIGHT) continue;
+    if (patrolDistance(input.baseKey, centre) > reachKm) continue;
     const inside = provincesInCircle(centre, radius);
     let power = 0;
     let hostile = 0;

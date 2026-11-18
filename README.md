@@ -410,3 +410,23 @@ The game now starts on 1 January 1950 and is called Cold War 1950.
 - **Flags** drawn for the PRC, Taiwan (ROC), both Germanys, North Korea and Israel; South Korea keeps the Taegeukgi.
 - Names, start year, research era and saved-preference keys say 1950. The default campaign is "Classic Cold War 1950".
 - **Province keys changed again.** Old campaigns are hidden automatically and a new default campaign is created at start. To delete the hidden ones, run `docs/map-rebuild.sql`.
+
+## 1950s mechanics: land, air and sea movement
+
+**No database change.** Deploy and restart; existing campaigns keep working (armies already on the move finish their current leg on the old timing, later legs use the new rules).
+
+- **Real distances.** Every march, voyage and flight is measured in kilometres on the real globe (`geo.ts`). Unit speeds are real early-1950s sustained speeds in km/h, and movement runs **24× faster than real life**: one real hour of play is one day of 1950s campaigning (at `GAME_SPEED` 1). The single knob is `MOVE_TIME_COMPRESSION` in `packages/shared/src/game-data/era.ts`.
+  - Infantry 8 km/h, field artillery 6, light tanks 14, heavy tanks 6; jet fighters 850, fighter-bombers 500, strategic bombers 400; destroyers 37 (20 kn), cruisers 33, battleships 30, corvettes 28, submarines 18.
+  - Example: infantry from Washington to Chicago (about 950 km) takes about 6 game hours; fighters cover the same distance in a few minutes. **Land armies move about 5× slower than before, ships about 2× slower, aircraft much faster.** If land feels too slow, raise `MOVE_TIME_COMPRESSION`.
+- **Land: each unit pays its own terrain.** Foot infantry, towed guns and tracked tanks have separate penalties (tanks bog down in forests and mountains, do fine in deserts). A mixed army moves at its slowest unit on each leg.
+- **Railways are troop trains.** In a province with a working railway every unit, heavy tanks included, rides at 30 km/h and ignores terrain on that half of the leg. Rail now matters most for slow units.
+- **Ferries** move at landing-craft speed (15 km/h) whatever the unit.
+- **Sealift and amphibious assault (new).** Land troops standing in one of your own provinces with a working **Harbor** can be ordered to any port: they embark (2 game hours) and sail at 22 km/h. The game picks the sealift when it is faster than marching, or when no road leads there. Landing straight into an **enemy** port is an amphibious assault: **−25% attack** (shown in the battle report as "Amphibious landing"). The order panel shows "⚓ Sealift" and the route is drawn along the sea lanes.
+- **Air: aircraft fly from airbases.** Each aircraft type has a combat radius: jet fighters 700 km, fighter-bombers 550 km, strategic bombers 2,500 km (a mixed force uses its shortest). Strikes and patrols must lie within that radius of **your nearest airbase**. Ordering aircraft to one of your own provinces is a **rebase** and must end at one of your airbases, within 2.5× the radius in one hop. Ending a patrol sends the aircraft home to the nearest airbase. Aircraft fly straight over any land. The order panel shows the radius and explains why an order is out of range; the server checks the same rule (`airOrderProblem` in `patrol.ts`).
+- **Patrol circles** are now sized in km (fighters 450 km, fighter-bombers 400, bombers 350), about half the old area.
+- **1950 starting technology.** Countries start with what they had on 1 January 1950: superpowers (USA, Soviet Union) have light tanks, jet fighters, strategic bombers, destroyers, submarines and assembly lines; major powers have light tanks, fighters and destroyers; medium powers light tanks and fighters; AI minors nothing. This works in existing campaigns too (`STARTING_TECHS_BY_TIER` in `era.ts`).
+- **Unit names and models.** Same unit types, period names: Field Artillery, Jet Fighter, Strategic Bomber, Fighter-Bomber. The factory panel lists the real equipment each one stands for (for example "F-86 Sabre, MiG-15, Gloster Meteor") with its speed and range.
+- **AI:** AI patrols measure their range from their nearest airbase too. AI land orders may use a sealift when it is faster.
+- **Tests:** `packages/shared/src/era.test.ts` covers distances, speeds, terrain per unit, troop trains, sealift, amphibious assault, air ranges and starting tech.
+
+**Known gaps:** troops on a sealift cannot be intercepted by enemy fleets yet; the AI does not plan amphibious invasions on purpose; aircraft carriers (which would lift the airbase rule at sea) are still in the Version 2.0 plan.

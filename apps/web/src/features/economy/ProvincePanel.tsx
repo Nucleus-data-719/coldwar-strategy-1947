@@ -243,6 +243,10 @@ export function ProvincePanel({ campaignId, state, provinceKey, balance, onStart
             {costText(orderCost)} · {formatDuration(scaleSeconds(UNITS[chosen].buildSeconds, state.campaign.gameSpeed))} each
             {UNITS[chosen].upkeep.oil ? ` · uses ${UNITS[chosen].upkeep.oil} oil/h` : ''}
           </p>
+          <p className="muted small">
+            {UNITS[chosen].models} · {UNITS[chosen].speed} km/h
+            {UNITS[chosen].rangeKm ? ` · combat radius ${UNITS[chosen].rangeKm} km` : ''}
+          </p>
           <ul className="list compact">
             {p.productionQueue.map((o) => (
               <li key={o.id}>
